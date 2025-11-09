@@ -21,7 +21,7 @@ spring-backend/
 ├── pom.xml
 ├── src/
 │   ├── main/
-│   │   ├── java/com/example/...
+│   │   ├── java/com/example/
 │   │   └── resources/application.properties
 │   └── test/
 └── target/
@@ -38,7 +38,6 @@ spring.datasource.username=${SPRING_DATASOURCE_USERNAME}
 spring.datasource.password=${SPRING_DATASOURCE_PASSWORD}
 spring.jpa.hibernate.ddl-auto=${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
 ```
-
 ---
 
 ### 2.2 Proyecto Ansible (ansible-fullstack-lab)
@@ -105,7 +104,7 @@ services:
   backend:
     build:
       context: /home/jorge/IdeaProjects/spring-backend
-      dockerfile: /ruta/a/ansible-fullstack-lab/Dockerfile.backend
+      dockerfile: ./ansible-fullstack-lab/Dockerfile.backend
     container_name: node2
     depends_on:
       - database
