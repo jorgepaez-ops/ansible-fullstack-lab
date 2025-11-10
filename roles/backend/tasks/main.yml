@@ -1,0 +1,39 @@
+- name: Instalar Java
+  ansible.builtin.apt:
+    name: openjdk-21-jdk
+    state: present
+    update_cache: yes
+
+- name: Crear directorio para app
+  ansible.builtin.file:
+    path: /opt/app
+    state: directory
+
+- name: Copiar archivo .jar
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/app.jar"
+    dest: /opt/app/app.jar
+    mode: "0755"
+
+- name: Crear servicio systemd para la app
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/demo.service
+    content: |
+      [Unit]
+      Description=Demo Spring Boot App
+      After=network.target
+
+      [Service]
+      ExecStart=/usr/bin/java -jar /opt/app/app.jar
+      Restart=always
+      User=root
+      WorkingDirectory=/opt/app
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Iniciar servicio
+  ansible.builtin.systemd:
+    name: demo
+    state: started
+    enabled: yes

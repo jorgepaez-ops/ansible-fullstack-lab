@@ -1,0 +1,17 @@
+- name: Instalar PostgreSQL
+  ansible.builtin.apt:
+    name: postgresql
+    state: present
+    update_cache: yes
+
+- name: Copiar script SQL inicial
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/init.sql"
+    dest: /tmp/init.sql
+    mode: "0644"
+
+- name: Cargar datos iniciales
+  become_user: postgres
+  ansible.builtin.command: psql -f /tmp/init.sql
+  args:
+    creates: /var/lib/postgresql/data/PG_VERSION
