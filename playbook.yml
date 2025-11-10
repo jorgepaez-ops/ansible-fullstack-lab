@@ -1,0 +1,17 @@
+- name: Configurar frontend con Nginx
+  hosts: frontend
+  become: true
+  roles:
+    - frontend
+
+- name: Configurar backend con Spring Boot
+  hosts: backend
+  become: true
+  roles:
+    - backend
+
+- name: Configurar base de datos PostgreSQL
+  hosts: database
+  become: true
+  roles:
+    - database
