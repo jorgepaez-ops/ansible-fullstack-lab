@@ -1,0 +1,33 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu
+    container_name: node1
+    ports:
+      - "2221:22"
+      - "8081:80"     # Nginx visible en host
+    volumes:
+      - ./files/index.html:/var/www/html/index.html
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu
+    container_name: node2
+    ports:
+      - "2222:22"
+      - "8080:8080"   # Spring Boot visible en host
+    volumes:
+      - ./files/app.jar:/opt/app/app.jar
+
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu
+    container_name: node3
+    ports:
+      - "2223:22"
+      - "5432:5432"   # PostgreSQL visible en host
+    volumes:
+      - ./files/init.sql:/docker-entrypoint-initdb.d/init.sql
