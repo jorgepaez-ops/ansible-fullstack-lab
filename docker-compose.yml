@@ -1,33 +1,98 @@
+# =============================================================================
+# docker-compose.yml — Infraestructura local del laboratorio Ansible
+# =============================================================================
+#
+# CONCEPTO:
+#   Docker Compose define y levanta múltiples contenedores como un conjunto.
+#   En este lab, cada contenedor simula un SERVIDOR independiente con SSH,
+#   permitiendo que Ansible se conecte como lo haría con servidores reales.
+#
+# ARQUITECTURA:
+#   ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+#   │  frontend      │  │  backend       │  │  database      │
+#   │  (node1)       │  │  (node2)       │  │  (node3)       │
+#   │  SSH :2221     │  │  SSH :2222     │  │  SSH :2223     │
+#   │  HTTP :8081    │  │  HTTP :8080    │  │  PG :5432      │
+#   └────────────────┘  └────────────────┘  └────────────────┘
+#
+# COMANDOS:
+#   docker compose up -d          # Levantar todos los contenedores
+#   docker compose up -d --build  # Reconstruir imágenes y levantar
+#   docker compose ps             # Ver estado de los contenedores
+#   docker compose logs -f        # Ver logs en tiempo real
+#   docker compose down           # Detener y eliminar contenedores
+#   docker compose down -v        # + eliminar volúmenes (reset total)
+#   docker exec -it node1 bash    # Entrar a un contenedor
+#
+# NOTA:
+#   Este archivo NO necesita la clave `version:` — Docker Compose v2+
+#   lo detecta automáticamente. La clave version está deprecada.
+# =============================================================================
+
 services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # FRONTEND — Servidor web (Nginx)
+  # ─────────────────────────────────────────────────────────────────────────
+  # Ansible instala Nginx y despliega el HTML aquí.
+  # Puerto 2221 (SSH) → Ansible se conecta por aquí.
+  # Puerto 8081 (HTTP) → Accedes al frontend desde tu navegador.
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.ubuntu
-    container_name: node1
+    container_name: node1       # Nombre fijo (coincide con inventory.ini)
+    hostname: node1             # Hostname visible dentro del contenedor
     ports:
-      - "2221:22"
-      - "8081:80"     # Nginx visible en host
-    volumes:
-      - ./files/index.html:/var/www/html/index.html
+      - "2221:22"               # SSH: tu Mac :2221 → contenedor :22
+      - "8081:80"               # HTTP: tu Mac :8081 → Nginx :80
+    restart: unless-stopped     # Reiniciar si se cae (salvo stop manual)
+    # Healthcheck: verificar que SSH está listo
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "BatchMode=yes", "localhost", "exit"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # BACKEND — Servidor de aplicación (Spring Boot / Java)
+  # ─────────────────────────────────────────────────────────────────────────
+  # Ansible instala Java, copia el .jar, y crea un servicio systemd.
+  # Puerto 2222 (SSH) → Ansible se conecta por aquí.
+  # Puerto 8080 (HTTP) → Accedes al API desde tu navegador o curl.
   backend:
     build:
       context: .
       dockerfile: Dockerfile.ubuntu
     container_name: node2
+    hostname: node2
     ports:
-      - "2222:22"
-      - "8080:8080"   # Spring Boot visible en host
-    volumes:
-      - ./files/app.jar:/opt/app/app.jar
+      - "2222:22"               # SSH
+      - "8080:8080"             # Spring Boot API
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "BatchMode=yes", "localhost", "exit"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # DATABASE — Servidor de base de datos (PostgreSQL)
+  # ─────────────────────────────────────────────────────────────────────────
+  # Ansible instala PostgreSQL, crea usuarios/bases, y carga datos.
+  # Puerto 2223 (SSH) → Ansible se conecta por aquí.
+  # Puerto 5432 (PG) → Puedes conectarte con pgAdmin, DBeaver, psql.
   database:
     build:
       context: .
       dockerfile: Dockerfile.ubuntu
     container_name: node3
+    hostname: node3
     ports:
-      - "2223:22"
-      - "5432:5432"   # PostgreSQL visible en host
-    volumes:
-      - ./files/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - "2223:22"               # SSH
+      - "5432:5432"             # PostgreSQL
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "BatchMode=yes", "localhost", "exit"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

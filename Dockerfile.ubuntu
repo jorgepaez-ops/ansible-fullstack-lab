@@ -1,16 +1,94 @@
-#FROM ubuntu:24.04
+# =============================================================================
+# Dockerfile.ubuntu — Imagen base para nodos del laboratorio Ansible
+# =============================================================================
+#
+# PROPÓSITO:
+#   Crear contenedores que simulan servidores Ubuntu reales con SSH habilitado.
+#   Ansible necesita SSH para conectarse y gestionar los hosts remotos.
+#
+# ¿POR QUÉ NO USAR CONTENEDORES NORMALES?
+#   Los contenedores Docker normalmente ejecutan UN proceso (nginx, postgres, etc.)
+#   y se gestionan con `docker exec`. Pero para practicar Ansible necesitamos
+#   que los contenedores sean "como servidores" con SSH, para que Ansible
+#   se conecte de la misma forma que lo haría con un servidor real en AWS/GCP.
+#
+# IMAGEN BASE:
+#   Ubuntu 24.04 LTS (Noble Numbat) — soporte hasta 2034.
+#   Puedes cambiar la versión con: docker compose build --build-arg UBUNTU_VERSION=22.04
+#
+# SEGURIDAD:
+#   ⚠️ Esta configuración es SOLO para laboratorio local.
+#   En producción:
+#     - NO permitir login root por SSH
+#     - NO usar passwords (solo SSH keys)
+#     - Usar imágenes mínimas (sin herramientas de debug)
+#     - No exponer SSH a internet
+#
+# CONSTRUCCIÓN:
+#   docker compose build               # Construir con versión default (24.04)
+#   docker compose build --build-arg UBUNTU_VERSION=22.04  # Otra versión
+#   docker compose build --no-cache     # Sin caché (reconstrucción limpia)
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Imagen base parametrizable con ARG
+# ─────────────────────────────────────────────────────────────────────────────
+# ARG permite cambiar la versión de Ubuntu sin editar el Dockerfile.
+# Se pasa con --build-arg al construir.
 ARG UBUNTU_VERSION=24.04
 FROM ubuntu:${UBUNTU_VERSION}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Instalar paquetes necesarios
+# ─────────────────────────────────────────────────────────────────────────────
+# Todo en un solo RUN para minimizar capas de la imagen Docker.
+# Cada RUN crea una "capa" — menos capas = imagen más pequeña.
+#
+# Paquetes instalados:
+#   openssh-server  → Servidor SSH (para que Ansible se conecte)
+#   openssh-client  → Cliente SSH (para ssh-copy-id dentro del contenedor)
+#   sudo            → Escalación de privilegios (become en Ansible)
+#   python3         → Requerido por Ansible para ejecutar módulos
+#   python3-apt     → Permite al módulo apt de Ansible funcionar
+#   iproute2        → Comando `ip` (Ansible lo usa para recolectar facts de red)
+#   systemctl       → Simula systemd para poder practicar con servicios
 RUN apt-get update && \
-    apt-get install -y openssh-server openssh-client sudo python3 python3-apt && \
-    (apt-get install -y fastfetch || apt-get install -y neofetch) && \
+    apt-get install -y \
+        openssh-server \
+        openssh-client \
+        sudo \
+        python3 \
+        python3-apt \
+        iproute2 \
+    && \
+    # ─────────────────────────────────────────────────────────────────────
+    # Configurar SSH
+    # ─────────────────────────────────────────────────────────────────────
+    # Crear directorio para el PID del daemon SSH
     mkdir -p /var/run/sshd && \
+    # Establecer password de root (solo para lab — NUNCA en producción)
     echo 'root:root' | chpasswd && \
+    # Permitir login como root por SSH (default: prohibit-password)
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    # Fix para PAM (evita error de login en contenedores)
     sed -i 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' /etc/pam.d/sshd && \
-    echo 'fastfetch || neofetch' >> /root/.bashrc && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    # ─────────────────────────────────────────────────────────────────────
+    # Limpieza (reduce tamaño de la imagen)
+    # ─────────────────────────────────────────────────────────────────────
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Exponer puerto SSH
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPOSE es documentación — indica qué puertos usa el contenedor.
+# El mapeo real se hace en docker-compose.yml con `ports:`.
 EXPOSE 22
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comando de inicio: arrancar el daemon SSH
+# ─────────────────────────────────────────────────────────────────────────────
+# -D: no hacer daemonize (quedarse en foreground).
+# Necesario para que Docker mantenga el contenedor vivo.
+# Sin -D, sshd se iría al background y Docker pensaría que el proceso terminó.
 CMD ["/usr/sbin/sshd", "-D"]
