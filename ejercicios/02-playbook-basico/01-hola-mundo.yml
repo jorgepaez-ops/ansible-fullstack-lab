@@ -1,0 +1,32 @@
+# =============================================================================
+# ejercicios/02-playbook-basico/01-hola-mundo.yml
+# =============================================================================
+#
+# TU PRIMER PLAYBOOK
+#
+# Estructura mínima de un playbook:
+#   - name: Nombre del play (aparece en la salida)
+#     hosts: grupo o "all"
+#     tasks:
+#       - name: Nombre de la tarea
+#         modulo:
+#           parametro: valor
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/02-playbook-basico/01-hola-mundo.yml
+# =============================================================================
+
+---
+# Un playbook es una LISTA de plays (empieza con -)
+- name: Mi primer playbook - Hola Mundo
+  hosts: all                  # Ejecutar en todos los hosts
+  gather_facts: false         # No recolectar facts (más rápido para este ejemplo)
+
+  # Lista de tareas a ejecutar (en orden)
+  tasks:
+    # Tarea 1: Mostrar un mensaje en la consola de Ansible
+    - name: Saludar desde cada host
+      ansible.builtin.debug:
+        msg: "Hola desde {{ inventory_hostname }}!"
+        # inventory_hostname es una variable especial que contiene
+        # el nombre del host actual (node1, node2, node3)

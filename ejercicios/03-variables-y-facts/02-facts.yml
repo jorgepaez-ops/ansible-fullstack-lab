@@ -1,0 +1,87 @@
+# =============================================================================
+# ejercicios/03-variables-y-facts/02-facts.yml
+# =============================================================================
+#
+# FACTS — Información que Ansible descubre automáticamente
+#
+# Cuando `gather_facts: true` (el default), Ansible ejecuta el módulo
+# `setup` en cada host y recolecta cientos de variables sobre el sistema.
+#
+# CÓMO VER TODOS LOS FACTS:
+#   ansible node1 -m setup                     # Todos (¡son muchos!)
+#   ansible node1 -m setup -a "filter=*ipv4*"  # Filtrar por patrón
+#
+# FACTS MÁS ÚTILES:
+#   ansible_distribution          → "Ubuntu"
+#   ansible_distribution_version  → "24.04"
+#   ansible_os_family             → "Debian"
+#   ansible_hostname              → nombre corto del host
+#   ansible_fqdn                  → nombre completo (FQDN)
+#   ansible_default_ipv4.address  → IP principal
+#   ansible_memtotal_mb           → RAM total en MB
+#   ansible_processor_vcpus       → Número de CPUs
+#   ansible_date_time.iso8601     → Fecha/hora actual
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/03-variables-y-facts/02-facts.yml
+# =============================================================================
+
+---
+- name: Explorar Facts del sistema
+  hosts: all
+  gather_facts: true  # ← Esto activa la recolección de facts
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Facts del sistema operativo
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Información del SO
+      ansible.builtin.debug:
+        msg:
+          - "Distribución: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Familia: {{ ansible_os_family }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Arquitectura: {{ ansible_architecture }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Facts de hardware
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Información de hardware
+      ansible.builtin.debug:
+        msg:
+          - "CPUs: {{ ansible_processor_vcpus }}"
+          - "RAM total: {{ ansible_memtotal_mb }} MB"
+          - "RAM libre: {{ ansible_memfree_mb }} MB"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Facts de red
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Información de red
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "FQDN: {{ ansible_fqdn }}"
+          - "IP principal: {{ ansible_default_ipv4.address | default('N/A') }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Facts de fecha/hora
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Fecha y hora del sistema
+      ansible.builtin.debug:
+        msg:
+          - "ISO 8601: {{ ansible_date_time.iso8601 }}"
+          - "Timezone: {{ ansible_date_time.tz }}"
+          - "Epoch: {{ ansible_date_time.epoch }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Uso de facts en condicionales (adelanto del ejercicio 04)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Verificar si es Ubuntu
+      ansible.builtin.debug:
+        msg: "Este host es Ubuntu — podemos usar apt"
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Verificar RAM mínima
+      ansible.builtin.debug:
+        msg: "ADVERTENCIA: Solo {{ ansible_memtotal_mb }}MB de RAM disponible"
+      when: ansible_memtotal_mb < 512

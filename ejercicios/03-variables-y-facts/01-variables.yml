@@ -1,0 +1,110 @@
+# =============================================================================
+# ejercicios/03-variables-y-facts/01-variables.yml
+# =============================================================================
+#
+# VARIABLES EN ANSIBLE
+#
+# Las variables permiten parametrizar tus playbooks para que funcionen
+# en diferentes entornos sin cambiar código.
+#
+# DÓNDE DEFINIR VARIABLES (de menor a mayor prioridad):
+#   1. roles/defaults/main.yml    → valores por defecto del rol
+#   2. group_vars/all.yml         → todos los hosts
+#   3. group_vars/<grupo>.yml     → hosts de un grupo
+#   4. host_vars/<host>.yml       → un host específico
+#   5. vars: en el play/task      → inline (este archivo)
+#   6. vars_files: archivo        → importar archivo externo
+#   7. register: resultado        → output de una tarea anterior
+#   8. -e "clave=valor" en CLI    → MÁXIMA prioridad (sobreescribe todo)
+#
+# SINTAXIS:
+#   Definición: clave: valor
+#   Uso: {{ clave }} (dentro de strings, con comillas: "{{ clave }}")
+#   Anidado: {{ dict.subclave }} o {{ dict['sub-clave'] }}
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/03-variables-y-facts/01-variables.yml
+#   # Sobreescribir desde CLI:
+#   ansible-playbook ejercicios/03-variables-y-facts/01-variables.yml -e "app_name=MiApp app_port=9090"
+# =============================================================================
+
+---
+- name: Demostración de variables
+  hosts: frontend
+  gather_facts: false
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # vars: Define variables directamente en el play
+  # ─────────────────────────────────────────────────────────────────────────
+  vars:
+    # Variables simples (string, número, booleano)
+    app_name: "DemoApp"
+    app_port: 8080
+    debug_mode: true
+
+    # Variable compleja (diccionario/mapa)
+    database:
+      host: "localhost"
+      port: 5432
+      name: "messagesdb"
+      credentials:
+        user: "demo"
+        password: "demo"
+
+    # Variable tipo lista
+    admin_emails:
+      - "admin@ejemplo.com"
+      - "ops@ejemplo.com"
+
+    # Variable con formato (multi-línea)
+    welcome_message: |
+      Bienvenido a {{ app_name }}
+      Puerto: {{ app_port }}
+      Debug: {{ debug_mode }}
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Acceder a variables simples
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar variables simples
+      ansible.builtin.debug:
+        msg: "App: {{ app_name }} | Puerto: {{ app_port }} | Debug: {{ debug_mode }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Acceder a diccionarios (notación punto o corchetes)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar variables de diccionario
+      ansible.builtin.debug:
+        msg: "DB: {{ database.host }}:{{ database.port }}/{{ database.name }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Acceder a diccionarios anidados
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar credenciales (anidado)
+      ansible.builtin.debug:
+        msg: "User: {{ database.credentials.user }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Acceder a listas (por índice)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar primer admin
+      ansible.builtin.debug:
+        msg: "Primer admin: {{ admin_emails[0] }} | Total: {{ admin_emails | length }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Variable multi-línea
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar mensaje de bienvenida (multi-línea con variables interpoladas)
+      ansible.builtin.debug:
+        msg: "{{ welcome_message }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Variables especiales (magic variables)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar variables especiales de Ansible
+      ansible.builtin.debug:
+        msg:
+          - "inventory_hostname: {{ inventory_hostname }}"
+          - "playbook_dir: {{ playbook_dir }}"
+          - "ansible_play_name: {{ ansible_play_name }}"
+          - "groups['frontend']: {{ groups['frontend'] }}"

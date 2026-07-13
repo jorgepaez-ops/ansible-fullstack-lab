@@ -1,0 +1,121 @@
+# =============================================================================
+# ejercicios/04-condicionales-y-loops/01-condicionales.yml
+# =============================================================================
+#
+# CONDICIONALES CON when:
+#
+# `when:` controla SI una tarea se ejecuta o se salta.
+# Es la forma de Ansible de hacer "if/else".
+#
+# REGLAS:
+#   - when: usa Jinja2 pero SIN las llaves {{ }}
+#   - Los valores se evalúan como Python: ==, !=, >, <, in, not, and, or
+#   - Si la condición es False → la tarea se muestra como "skipped"
+#   - Puedes combinar múltiples condiciones con `and` / `or`
+#   - Para múltiples condiciones AND, puedes usar una lista:
+#     when:
+#       - condicion1
+#       - condicion2    ← implícitamente AND
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/04-condicionales-y-loops/01-condicionales.yml
+# =============================================================================
+
+---
+- name: Demostración de condicionales
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    entorno: "development"
+    min_ram_mb: 256
+    paquetes_debug:
+      - strace
+      - tcpdump
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condicional basado en FACT (distribución del SO)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Ubuntu] Actualizar caché de apt"
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: "[RedHat] Actualizar caché de yum"
+      ansible.builtin.debug:
+        msg: "Usaría yum/dnf aquí"
+      when: ansible_os_family == "RedHat"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condicional basado en VARIABLE del playbook
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Instalar herramientas de debug (solo en development)
+      ansible.builtin.apt:
+        name: "{{ paquetes_debug }}"
+        state: present
+      when: entorno == "development"
+
+    - name: Aviso de producción
+      ansible.builtin.debug:
+        msg: "CUIDADO: Estás en entorno de producción"
+      when: entorno == "production"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condicional con comparación numérica
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Verificar RAM mínima
+      ansible.builtin.debug:
+        msg: "RAM OK: {{ ansible_memtotal_mb }}MB >= {{ min_ram_mb }}MB"
+      when: ansible_memtotal_mb >= min_ram_mb
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condicional con operador `in` (pertenencia a lista/string)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Acción solo en nodos web (frontend o backend)
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} es un nodo web"
+      when: inventory_hostname in groups['webservers'] | default([])
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condicional con register (resultado de tarea anterior)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Verificar si Nginx está instalado
+      ansible.builtin.command:
+        cmd: which nginx
+      register: nginx_check
+      ignore_errors: true    # No fallar si nginx no existe
+      changed_when: false    # Este comando nunca "cambia" nada
+
+    - name: Nginx está instalado
+      ansible.builtin.debug:
+        msg: "Nginx encontrado en: {{ nginx_check.stdout }}"
+      when: nginx_check.rc == 0  # rc = return code (0 = éxito)
+
+    - name: Nginx NO está instalado
+      ansible.builtin.debug:
+        msg: "Nginx no está instalado en {{ inventory_hostname }}"
+      when: nginx_check.rc != 0
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Múltiples condiciones (AND implícito con lista)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Acción con múltiples condiciones (AND)
+      ansible.builtin.debug:
+        msg: "Ubuntu con más de 256MB de RAM en development"
+      when:
+        - ansible_distribution == "Ubuntu"      # Y
+        - ansible_memtotal_mb >= 256            # Y
+        - entorno == "development"              # Las 3 deben ser true
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Condiciones OR
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Acción con OR
+      ansible.builtin.debug:
+        msg: "Este host es frontend O backend"
+      when: >
+        (inventory_hostname in groups.get('frontend', []))
+        or
+        (inventory_hostname in groups.get('backend', []))

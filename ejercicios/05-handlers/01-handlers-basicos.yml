@@ -1,0 +1,84 @@
+# =============================================================================
+# ejercicios/05-handlers/01-handlers-basicos.yml
+# =============================================================================
+#
+# HANDLERS: Acciones reactivas
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/05-handlers/01-handlers-basicos.yml
+#   # Ejecutar DOS veces para ver la diferencia:
+#   # 1ra vez: tasks "changed" → handlers se ejecutan
+#   # 2da vez: tasks "ok" → handlers NO se ejecutan
+# =============================================================================
+
+---
+- name: Demostración de handlers
+  hosts: frontend
+  become: true
+  gather_facts: false
+
+  vars:
+    config_content: |
+      # Configuración generada por Ansible
+      server_name=demo
+      port=8080
+      environment=lab
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────
+    # Tarea que NOTIFICA un handler si cambia algo
+    # ─────────────────────────────────────────────────────────────────────
+    - name: Crear directorio de configuración
+      ansible.builtin.file:
+        path: /tmp/handler-demo
+        state: directory
+        mode: "0755"
+
+    - name: Desplegar archivo de configuración
+      ansible.builtin.copy:
+        content: "{{ config_content }}"
+        dest: /tmp/handler-demo/app.conf
+        mode: "0644"
+      notify: Mostrar que la config cambió
+      # ↑ Si el archivo cambió → encola el handler
+      # Si el archivo ya existía idéntico → NO encola nada
+
+    - name: Desplegar segundo archivo
+      ansible.builtin.copy:
+        content: "log_level=debug\n"
+        dest: /tmp/handler-demo/logging.conf
+        mode: "0644"
+      notify:
+        - Mostrar que la config cambió
+        - Simular reinicio de servicio
+      # ↑ Puedes notificar MÚLTIPLES handlers desde una tarea
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Esta tarea se ejecuta ANTES de los handlers
+    # (los handlers van al final del play)
+    # ─────────────────────────────────────────────────────────────────────
+    - name: "Tarea normal (se ejecuta ANTES de los handlers)"
+      ansible.builtin.debug:
+        msg: "Las tareas normales se ejecutan en orden. Los handlers van al final."
+
+    # ─────────────────────────────────────────────────────────────────────
+    # flush_handlers: forzar ejecución INMEDIATA de handlers encolados
+    # ─────────────────────────────────────────────────────────────────────
+    - name: Forzar ejecución de handlers ahora
+      ansible.builtin.meta: flush_handlers
+
+    - name: "Esta tarea se ejecuta DESPUÉS de los handlers (por flush)"
+      ansible.builtin.debug:
+        msg: "Gracias a flush_handlers, los handlers ya se ejecutaron."
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SECCIÓN HANDLERS
+  # ─────────────────────────────────────────────────────────────────────────
+  handlers:
+    - name: Mostrar que la config cambió
+      ansible.builtin.debug:
+        msg: "HANDLER: La configuración fue modificada. En la vida real aquí reiniciarías un servicio."
+
+    - name: Simular reinicio de servicio
+      ansible.builtin.debug:
+        msg: "HANDLER: Simulando reinicio del servicio... ¡Servicio reiniciado!"

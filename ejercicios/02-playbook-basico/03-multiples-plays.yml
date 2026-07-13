@@ -1,0 +1,95 @@
+# =============================================================================
+# ejercicios/02-playbook-basico/03-multiples-plays.yml
+# =============================================================================
+#
+# MÚLTIPLES PLAYS EN UN PLAYBOOK
+#
+# Un playbook puede tener VARIOS plays, cada uno dirigido a hosts diferentes.
+# Esto permite orquestar un sistema completo desde un solo archivo.
+#
+# Cada play es independiente:
+#   - Tiene su propio hosts:
+#   - Tiene su propio become:
+#   - Tiene su propio gather_facts:
+#   - Las variables de un play NO se comparten con otro (salvo set_fact en all)
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/02-playbook-basico/03-multiples-plays.yml
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 1: Preparar TODOS los nodos
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "Play 1: Preparación general"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Crear directorio temporal compartido
+      ansible.builtin.file:
+        path: /tmp/lab-ejercicio
+        state: directory
+        mode: "0777"
+
+    - name: Registrar marca de tiempo
+      ansible.builtin.copy:
+        content: "Configurado por Ansible el {{ ansible_date_time.iso8601 }}\n"
+        dest: /tmp/lab-ejercicio/timestamp.txt
+        mode: "0644"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 2: Configurar solo el frontend
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "Play 2: Configuración específica del frontend"
+  hosts: frontend
+  become: true
+  gather_facts: false  # Ya recolectados en Play 1
+
+  tasks:
+    - name: Crear archivo específico del frontend
+      ansible.builtin.copy:
+        content: |
+          Rol: Frontend (Nginx)
+          Puerto: 80
+          Función: Servir contenido estático + reverse proxy
+        dest: /tmp/lab-ejercicio/rol.txt
+        mode: "0644"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 3: Configurar solo el backend
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "Play 3: Configuración específica del backend"
+  hosts: backend
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Crear archivo específico del backend
+      ansible.builtin.copy:
+        content: |
+          Rol: Backend (Spring Boot)
+          Puerto: 8080
+          Función: API REST + lógica de negocio
+        dest: /tmp/lab-ejercicio/rol.txt
+        mode: "0644"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 4: Verificación (ejecuta en tu Mac, no en los nodos)
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "Play 4: Resumen de ejecución"
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Leer archivos creados
+      ansible.builtin.command:
+        cmd: cat /tmp/lab-ejercicio/rol.txt
+      register: rol_info
+      changed_when: false
+      ignore_errors: true
+
+    - name: Mostrar resultado
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} → {{ rol_info.stdout | default('Sin archivo de rol') }}"

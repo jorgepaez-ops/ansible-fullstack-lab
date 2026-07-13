@@ -1,0 +1,76 @@
+# =============================================================================
+# ejercicios/02-playbook-basico/02-multiples-tareas.yml
+# =============================================================================
+#
+# MÚLTIPLES TAREAS EN UN PLAY
+#
+# Las tareas se ejecutan en ORDEN (de arriba a abajo).
+# Si una tarea falla, Ansible DETIENE la ejecución para ese host.
+# Otros hosts continúan independientemente.
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/02-playbook-basico/02-multiples-tareas.yml
+#   ansible-playbook ejercicios/02-playbook-basico/02-multiples-tareas.yml -v  # verbose
+# =============================================================================
+
+---
+- name: Configuración básica de un servidor
+  hosts: frontend             # Solo ejecutar en el grupo frontend (node1)
+  become: true                # Ejecutar como root (sudo)
+  gather_facts: true          # Recolectar información del sistema
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 1: Mostrar información del sistema (usando facts)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar sistema operativo detectado
+      ansible.builtin.debug:
+        msg: "Sistema: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 2: Instalar un paquete
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Instalar el paquete 'tree'
+      ansible.builtin.apt:
+        name: tree
+        state: present              # present = instalar si no existe
+        update_cache: true
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 3: Crear un directorio
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Crear directorio para el ejercicio
+      ansible.builtin.file:
+        path: /tmp/ejercicio-02
+        state: directory            # directory = crear carpeta
+        mode: "0755"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 4: Crear un archivo con contenido
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Crear archivo de prueba
+      ansible.builtin.copy:
+        content: |
+          Este archivo fue creado por Ansible.
+          Host: {{ inventory_hostname }}
+          Fecha de ejecución: {{ ansible_date_time.iso8601 }}
+        dest: /tmp/ejercicio-02/info.txt
+        mode: "0644"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 5: Verificar que el archivo existe
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Verificar contenido del archivo creado
+      ansible.builtin.command:
+        cmd: cat /tmp/ejercicio-02/info.txt
+      register: file_content        # Guardar la salida en una variable
+      changed_when: false           # Este comando nunca "cambia" nada
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tarea 6: Mostrar el contenido capturado
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar contenido del archivo
+      ansible.builtin.debug:
+        var: file_content.stdout_lines
+        # .stdout → salida como string
+        # .stdout_lines → salida como lista (una línea por elemento)

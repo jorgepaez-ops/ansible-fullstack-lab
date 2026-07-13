@@ -1,0 +1,133 @@
+# =============================================================================
+# ejercicios/04-condicionales-y-loops/02-loops.yml
+# =============================================================================
+#
+# LOOPS (BUCLES) EN ANSIBLE
+#
+# `loop:` repite una tarea para cada elemento de una lista.
+# El elemento actual está disponible como {{ item }}.
+#
+# TIPOS DE LOOP:
+#   loop: [a, b, c]                    → Lista simple
+#   loop: "{{ mi_lista }}"             → Variable tipo lista
+#   loop: "{{ lista | flatten }}"      → Aplanar listas anidadas
+#
+# LOOP CON DICCIONARIOS:
+#   loop:
+#     - { name: "app1", port: 8080 }
+#     - { name: "app2", port: 9090 }
+#   → item.name, item.port
+#
+# NOTA HISTÓRICA:
+#   Antes se usaba `with_items:` — está deprecado. Usa `loop:` siempre.
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/04-condicionales-y-loops/02-loops.yml
+# =============================================================================
+
+---
+- name: Demostración de loops
+  hosts: frontend
+  become: true
+  gather_facts: false
+
+  vars:
+    # Lista simple de paquetes
+    paquetes_utiles:
+      - tree
+      - jq
+      - unzip
+
+    # Lista de diccionarios (objetos)
+    usuarios:
+      - { name: "dev1", shell: "/bin/bash", groups: "sudo" }
+      - { name: "dev2", shell: "/bin/bash", groups: "sudo" }
+      - { name: "deploy", shell: "/usr/sbin/nologin", groups: "" }
+
+    # Lista de archivos a crear
+    archivos_config:
+      - { path: "/tmp/loop-test/app.conf", content: "port=8080\nenv=dev" }
+      - { path: "/tmp/loop-test/db.conf", content: "host=localhost\nport=5432" }
+      - { path: "/tmp/loop-test/cache.conf", content: "host=localhost\nport=6379" }
+
+  tasks:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Loop simple: lista de strings
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Instalar múltiples paquetes con loop
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop: "{{ paquetes_utiles }}"
+      # Alternativa más eficiente (sin loop, apt acepta listas):
+      #   ansible.builtin.apt:
+      #     name: "{{ paquetes_utiles }}"
+      #     state: present
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Loop con diccionarios
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Crear múltiples usuarios
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        shell: "{{ item.shell }}"
+        groups: "{{ item.groups }}"
+        state: present
+        create_home: true
+      loop: "{{ usuarios }}"
+      when: item.name != ""  # Ejemplo: combinar loop + when
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Crear directorio antes de los archivos
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Crear directorio para archivos de configuración
+      ansible.builtin.file:
+        path: /tmp/loop-test
+        state: directory
+        mode: "0755"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Loop creando archivos desde diccionarios
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Crear múltiples archivos de configuración
+      ansible.builtin.copy:
+        content: "{{ item.content }}\n"
+        dest: "{{ item.path }}"
+        mode: "0644"
+      loop: "{{ archivos_config }}"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Loop con index (loop.index empieza en 1, loop.index0 en 0)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Mostrar archivos con su índice
+      ansible.builtin.debug:
+        msg: "[{{ ansible_loop.index }}/{{ ansible_loop.length }}] {{ item.path }}"
+      loop: "{{ archivos_config }}"
+      loop_control:
+        extended: true  # Habilita ansible_loop.index, .length, .first, .last
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Loop con label personalizado (para output más limpio)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Verificar usuarios creados
+      ansible.builtin.command:
+        cmd: "id {{ item.name }}"
+      loop: "{{ usuarios }}"
+      loop_control:
+        label: "{{ item.name }}"  # Solo muestra el nombre, no todo el dict
+      register: user_check
+      changed_when: false
+      ignore_errors: true
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Limpiar: eliminar usuarios de prueba
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: Eliminar usuarios de prueba (limpieza)
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        state: absent
+        remove: true
+      loop: "{{ usuarios }}"
+      loop_control:
+        label: "{{ item.name }}"
