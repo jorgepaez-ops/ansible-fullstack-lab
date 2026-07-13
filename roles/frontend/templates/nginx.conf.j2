@@ -1,0 +1,85 @@
+# =============================================================================
+# roles/frontend/templates/nginx.conf.j2 — Plantilla Jinja2 para Nginx
+# =============================================================================
+#
+# CONCEPTO JINJA2:
+#   Las plantillas Jinja2 (.j2) son archivos con "huecos" que Ansible rellena
+#   con variables al momento de copiarlos al servidor destino.
+#
+#   Sintaxis:
+#     {{ variable }}          → Se reemplaza por el valor de la variable
+#     {% if condicion %}      → Bloque condicional (se incluye o no)
+#     {% for item in lista %} → Bucle (repite contenido por cada item)
+#     {# comentario #}       → Comentario Jinja2 (no aparece en el archivo final)
+#
+# MÓDULO QUE LO USA:
+#   ansible.builtin.template (no ansible.builtin.copy)
+#   La diferencia: copy copia tal cual, template procesa las variables.
+#
+# ARCHIVO GENERADO:
+#   /etc/nginx/sites-available/default
+#
+# VARIABLES DISPONIBLES:
+#   Todas las variables del contexto de ejecución: group_vars, defaults, facts, etc.
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bloque server — Define un virtual host de Nginx
+# ─────────────────────────────────────────────────────────────────────────────
+server {
+    # Puerto donde Nginx escuchará conexiones HTTP
+    # Variable definida en: group_vars/frontend.yml o roles/frontend/defaults/main.yml
+    listen {{ nginx_listen_port }} default_server;
+    listen [::]:{{ nginx_listen_port }} default_server;
+
+    # Nombre del servidor (para virtual hosting basado en dominio)
+    # Con "localhost" acepta cualquier petición que llegue al puerto
+    server_name {{ nginx_server_name }};
+
+    # Directorio raíz donde buscar archivos estáticos
+    root {{ nginx_document_root }};
+
+    # Archivo que se sirve cuando piden "/" (sin especificar archivo)
+    index {{ nginx_index_file }};
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Ubicación principal — Servir archivos estáticos
+    # ─────────────────────────────────────────────────────────────────────
+    # try_files intenta servir:
+    #   1. El archivo exacto pedido ($uri)
+    #   2. Un directorio con ese nombre ($uri/)
+    #   3. Si nada existe → devolver 404
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+{% if nginx_proxy_backend_url %}
+    # ─────────────────────────────────────────────────────────────────────
+    # Reverse Proxy — Reenviar peticiones /api al backend
+    # ─────────────────────────────────────────────────────────────────────
+    # Nginx actúa como intermediario: el cliente habla con Nginx,
+    # y Nginx reenvía la petición al backend Spring Boot.
+    #
+    # Ventajas del reverse proxy:
+    #   - El cliente solo conoce un puerto (80)
+    #   - Se puede agregar caché, rate limiting, SSL terminación
+    #   - El backend no necesita estar expuesto directamente
+    location {{ nginx_proxy_path }}/ {
+        proxy_pass {{ nginx_proxy_backend_url }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts para evitar que conexiones lentas bloqueen workers
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 60s;
+    }
+{% endif %}
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Logs — Registro de accesos y errores
+    # ─────────────────────────────────────────────────────────────────────
+    access_log /var/log/nginx/{{ nginx_server_name }}_access.log;
+    error_log /var/log/nginx/{{ nginx_server_name }}_error.log;
+}

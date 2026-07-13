@@ -1,0 +1,61 @@
+# =============================================================================
+# roles/frontend/handlers/main.yml — Acciones reactivas (on-demand)
+# =============================================================================
+#
+# CONCEPTO CLAVE:
+#   Un handler es una tarea que SOLO se ejecuta si otra tarea lo "notifica".
+#   Es el patrón ideal para reinicios de servicios:
+#     - Modifiqué la config de Nginx → notificar reinicio
+#     - NO modifiqué nada → el handler NO se ejecuta
+#
+#   Esto evita reinicios innecesarios que interrumpirían el servicio.
+#
+# CÓMO FUNCIONA:
+#   1. Una task incluye `notify: Reiniciar Nginx`
+#   2. Si esa task CAMBIÓ algo (estado "changed"), el handler se encola
+#   3. Al FINAL del play (no inmediatamente), se ejecutan todos los handlers encolados
+#   4. Si la task no cambió nada (estado "ok"), el handler NO se ejecuta
+#
+# ORDEN DE EJECUCIÓN:
+#   Los handlers se ejecutan en el ORDEN en que están definidos aquí,
+#   NO en el orden en que fueron notificados. Si necesitas un orden
+#   específico, ordénalos correctamente en este archivo.
+#
+# NOTA IMPORTANTE:
+#   El nombre del handler debe coincidir EXACTAMENTE con el `notify:` de la task.
+#   Es case-sensitive: "Reiniciar Nginx" ≠ "reiniciar nginx"
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Validar configuración de Nginx antes de reiniciar
+# ─────────────────────────────────────────────────────────────────────────────
+# `nginx -t` verifica que la sintaxis del archivo de configuración sea correcta.
+# Si falla, Ansible detiene la ejecución ANTES de reiniciar (evita downtime).
+- name: Validar configuración de Nginx
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false  # Este comando nunca "cambia" nada, solo valida
+  listen: "Reiniciar Nginx"  # Se ejecuta cuando se notifica "Reiniciar Nginx"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Reiniciar el servicio Nginx
+# ─────────────────────────────────────────────────────────────────────────────
+# Se ejecuta DESPUÉS del handler de validación (por orden en el archivo).
+# Usa `restarted` para que Nginx recargue toda su configuración.
+- name: Reiniciar Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+  listen: "Reiniciar Nginx"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Recargar Nginx (sin reinicio completo)
+# ─────────────────────────────────────────────────────────────────────────────
+# `reloaded` envía señal SIGHUP al proceso master de Nginx.
+# Recarga configuración SIN interrumpir conexiones activas.
+# Ideal para cambios menores (agregar un server block, cambiar log format).
+- name: Recargar Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded

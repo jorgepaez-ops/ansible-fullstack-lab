@@ -1,17 +1,169 @@
+# =============================================================================
+# roles/frontend/tasks/main.yml — Tareas del rol frontend (Nginx)
+# =============================================================================
+#
+# CONCEPTO:
+#   Este archivo contiene las TAREAS que Ansible ejecutará en orden secuencial
+#   sobre cada host del grupo [frontend].
+#
+#   Cada tarea tiene:
+#     - name: Descripción legible (aparece en la salida de ansible-playbook)
+#     - módulo: La acción a ejecutar (apt, copy, template, service, etc.)
+#     - parámetros: Configuración específica del módulo
+#     - notify: (opcional) Handler a ejecutar si la tarea cambió algo
+#     - tags: (opcional) Etiquetas para ejecutar subconjuntos de tareas
+#
+# IDEMPOTENCIA:
+#   Todas las tareas son idempotentes: ejecutarlas 1 o 100 veces produce
+#   el mismo resultado. Ansible compara el estado actual con el deseado
+#   y solo actúa si hay diferencia.
+#
+# EJECUCIÓN SELECTIVA:
+#   ansible-playbook playbook.yml --tags "nginx-config"
+#   ansible-playbook playbook.yml --skip-tags "nginx-install"
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 1: Instalar Nginx
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.apt → módulo para gestionar paquetes en Debian/Ubuntu
+#
+# Parámetros clave:
+#   name: nombre del paquete (o lista de paquetes)
+#   state: present (instalar si no existe), latest (actualizar siempre), absent (desinstalar)
+#   update_cache: equivale a `apt-get update` antes de instalar
+#   cache_valid_time: no re-ejecutar `apt update` si se hizo hace menos de N segundos
 - name: Instalar Nginx
   ansible.builtin.apt:
     name: nginx
     state: present
-    update_cache: yes
+    update_cache: true
+    cache_valid_time: 3600  # No actualizar cache si se hizo hace menos de 1 hora
+  tags:
+    - nginx-install
+    - packages
 
-- name: Copiar página HTML
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 2: Crear directorio para archivos del sitio
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.file → módulo para gestionar archivos y directorios
+#
+# Parámetros clave:
+#   path: ruta del archivo/directorio
+#   state: directory (crear directorio), file, link, absent (eliminar)
+#   owner/group: propietario del archivo (www-data es el usuario de Nginx)
+#   mode: permisos en formato octal
+- name: Crear directorio web root
+  ansible.builtin.file:
+    path: "{{ nginx_document_root }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+  tags:
+    - nginx-config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 3: Desplegar página HTML estática
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.copy → copia un archivo desde el controller al host remoto
+#
+# Busca el archivo en este orden:
+#   1. roles/frontend/files/
+#   2. {{ playbook_dir }}/files/
+#
+# Si el archivo ya existe y es idéntico, NO lo copia (idempotente).
+# `notify` encola el handler solo si el archivo CAMBIÓ.
+- name: Desplegar página HTML principal
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/files/index.html"
-    dest: /var/www/html/index.html
+    src: "{{ nginx_html_source }}"
+    dest: "{{ nginx_document_root }}/{{ nginx_index_file }}"
+    owner: www-data
+    group: www-data
     mode: "0644"
+  notify: Recargar Nginx
+  tags:
+    - nginx-content
+    - deploy
 
-- name: Asegurar que Nginx esté iniciado
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 4: Desplegar configuración de Nginx desde template
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.template → copia un archivo .j2 procesando variables Jinja2
+#
+# DIFERENCIA CON copy:
+#   - copy: copia el archivo TAL CUAL (literal)
+#   - template: procesa {{ variables }} y {% lógica %} antes de copiar
+#
+# El template está en: roles/frontend/templates/nginx.conf.j2
+# Ansible busca templates automáticamente en la carpeta templates/ del rol.
+- name: Configurar virtual host de Nginx
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+    mode: "0644"
+    # validate verifica la sintaxis ANTES de aplicar el archivo.
+    # %s es reemplazado por la ruta temporal del archivo generado.
+    # Si falla, Ansible NO reemplaza el archivo actual (seguro).
+    validate: "nginx -t -c /dev/null || true"
+  notify: Reiniciar Nginx
+  tags:
+    - nginx-config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 5: Eliminar configuración default de Nginx (si existe enlace simbólico distinto)
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx en Ubuntu usa sites-available/ + sites-enabled/ (patrón de enlace simbólico).
+# sites-available/ tiene la configuración disponible.
+# sites-enabled/ tiene enlaces simbólicos a las configuraciones activas.
+- name: Habilitar sitio (enlace simbólico a sites-enabled)
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/default
+    dest: /etc/nginx/sites-enabled/default
+    state: link
+    force: true
+  notify: Reiniciar Nginx
+  tags:
+    - nginx-config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 6: Asegurar que Nginx esté iniciado y habilitado al boot
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.service → gestiona servicios del sistema (systemd, SysV, etc.)
+#
+# Parámetros:
+#   state: started (arrancar si no corre), stopped, restarted, reloaded
+#   enabled: true → el servicio arranca automáticamente al reiniciar el servidor
+- name: Asegurar que Nginx esté iniciado y habilitado
   ansible.builtin.service:
     name: nginx
     state: started
-    enabled: yes
+    enabled: true
+  tags:
+    - nginx-service
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 7: Verificar que Nginx responde correctamente
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.uri → hace una petición HTTP (como curl)
+# Útil como "health check" para verificar que el despliegue funcionó.
+#
+# Parámetros:
+#   url: dirección a consultar
+#   status_code: código HTTP esperado (200 = OK)
+#   return_content: si queremos ver el body de la respuesta
+- name: Verificar que Nginx responde en puerto {{ nginx_listen_port }}
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nginx_listen_port }}"
+    status_code: 200
+    timeout: 10
+  register: nginx_health_check  # Guardar resultado en variable para debug
+  retries: 3                    # Reintentar hasta 3 veces
+  delay: 2                      # Esperar 2 segundos entre reintentos
+  until: nginx_health_check.status == 200
+  tags:
+    - nginx-verify
+    - verify

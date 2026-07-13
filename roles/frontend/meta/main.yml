@@ -1,0 +1,54 @@
+# =============================================================================
+# roles/frontend/meta/main.yml — Metadatos del rol
+# =============================================================================
+#
+# CONCEPTO:
+#   meta/ define información SOBRE el rol, no lo que el rol HACE.
+#   Sirve para:
+#     1. Dependencias: otros roles que deben ejecutarse ANTES de este
+#     2. Información para Ansible Galaxy (si publicas el rol)
+#     3. Plataformas soportadas
+#
+# DEPENDENCIAS:
+#   Si este rol necesita que otro se ejecute primero, se lista aquí.
+#   Ejemplo: un rol "app" podría depender del rol "java" para tener JDK.
+#   Ansible ejecuta las dependencias ANTES de las tasks del rol actual.
+#
+# ANSIBLE GALAXY:
+#   Si algún día publicas roles en Galaxy (repositorio público de roles),
+#   estos campos son obligatorios. Para uso local son informativos.
+# =============================================================================
+
+---
+galaxy_info:
+  author: "Jorge Paez"
+  description: "Rol para instalar y configurar Nginx como servidor frontend"
+  license: "MIT"
+
+  # Versión mínima de Ansible requerida por este rol
+  min_ansible_version: "2.16"
+
+  # Plataformas donde este rol ha sido probado
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble    # 24.04 LTS (nombre de código)
+        - jammy    # 22.04 LTS
+
+  # Categorías para búsqueda en Galaxy
+  galaxy_tags:
+    - nginx
+    - web
+    - frontend
+    - proxy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencias de otros roles
+# ─────────────────────────────────────────────────────────────────────────────
+# Si necesitaras que otro rol se ejecute antes, lo listarías así:
+#   dependencies:
+#     - role: common
+#     - role: geerlingguy.certbot  # Rol externo de Galaxy
+#
+# En este lab no tenemos dependencias — el rol es autónomo.
+dependencies: []

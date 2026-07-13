@@ -1,0 +1,46 @@
+# =============================================================================
+# roles/frontend/defaults/main.yml — Valores por defecto del rol frontend
+# =============================================================================
+#
+# CONCEPTO:
+#   defaults/ contiene variables con la MENOR prioridad en Ansible.
+#   Son valores "de fábrica" que se pueden sobreescribir desde:
+#     - group_vars/frontend.yml (prioridad media)
+#     - host_vars/<host>.yml (prioridad alta)
+#     - extra-vars en CLI: -e "nginx_listen_port=8080" (prioridad máxima)
+#
+#   Regla de oro: usa defaults/ para valores sensatos que funcionen sin tocar nada.
+#   Si el usuario no define nada en group_vars, estos se usan automáticamente.
+#
+# DIFERENCIA ENTRE defaults/ y vars/:
+#   - defaults/main.yml → prioridad BAJA (se sobreescribe fácil)
+#   - vars/main.yml → prioridad ALTA (casi no se puede sobreescribir)
+#   Usa vars/ solo para constantes internas del rol que NO deben cambiar.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx — Configuración básica
+# ─────────────────────────────────────────────────────────────────────────────
+nginx_listen_port: 80
+nginx_server_name: "localhost"
+nginx_document_root: "/var/www/html"
+nginx_index_file: "index.html"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx — Workers (rendimiento)
+# ─────────────────────────────────────────────────────────────────────────────
+nginx_worker_processes: "auto"
+nginx_worker_connections: 512
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx — Reverse Proxy (opcional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Si se define, Nginx reenviará peticiones a /api hacia el backend.
+nginx_proxy_backend_url: ""
+nginx_proxy_path: "/api"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Archivos estáticos a desplegar
+# ─────────────────────────────────────────────────────────────────────────────
+nginx_html_source: "index.html"
