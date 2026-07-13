@@ -1,0 +1,41 @@
+# =============================================================================
+# requirements.yml — Declaración de Collections externas
+# =============================================================================
+#
+# Ansible usa "collections" para agrupar módulos, plugins y roles.
+# Este archivo declara las collections que necesita el proyecto.
+#
+# USO:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# NOTA: ansible.builtin viene incluido por defecto, no necesita declararse.
+# Solo declaramos collections externas que NO vienen con ansible-core.
+# =============================================================================
+
+---
+collections:
+  # ─────────────────────────────────────────────────────────────────────────
+  # community.postgresql — Módulos para gestionar PostgreSQL
+  # ─────────────────────────────────────────────────────────────────────────
+  # Incluye: postgresql_db, postgresql_user, postgresql_query, etc.
+  # Reemplaza el uso de `command: psql` por módulos idempotentes nativos.
+  # Docs: https://docs.ansible.com/ansible/latest/collections/community/postgresql/
+  - name: community.postgresql
+    version: ">=3.0.0"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # community.general — Módulos de propósito general
+  # ─────────────────────────────────────────────────────────────────────────
+  # Incluye: ufw, timezone, locale_gen, ini_file, etc.
+  # Útil para configuraciones de sistema no cubiertas por ansible.builtin.
+  # Docs: https://docs.ansible.com/ansible/latest/collections/community/general/
+  - name: community.general
+    version: ">=9.0.0"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ansible.posix — Módulos POSIX complementarios
+  # ─────────────────────────────────────────────────────────────────────────
+  # Incluye: sysctl, authorized_key (mejorado), firewalld, mount, etc.
+  # Docs: https://docs.ansible.com/ansible/latest/collections/ansible/posix/
+  - name: ansible.posix
+    version: ">=1.5.0"

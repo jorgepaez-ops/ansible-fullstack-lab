@@ -1,0 +1,62 @@
+# =============================================================================
+# .ansible-lint — Configuración del linter para Ansible
+# =============================================================================
+#
+# ansible-lint analiza playbooks y roles buscando errores comunes,
+# anti-patrones y violaciones de mejores prácticas.
+#
+# INSTALACIÓN:
+#   pipx install ansible-lint
+#
+# USO:
+#   ansible-lint                    # Analiza todo el proyecto
+#   ansible-lint playbook.yml       # Analiza un archivo específico
+#   ansible-lint -p                 # Formato parseable (para CI/CD)
+#
+# DOCUMENTACIÓN: https://ansible.readthedocs.io/projects/lint/
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Perfil de severidad
+# ─────────────────────────────────────────────────────────────────────────────
+# Opciones: min, basic, moderate, safety, shared, production
+# "moderate" es un buen balance para aprendizaje — stricto pero no bloqueante.
+profile: moderate
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reglas a ignorar (skip_list)
+# ─────────────────────────────────────────────────────────────────────────────
+# Solo ignoramos lo que tiene justificación en un lab de aprendizaje.
+skip_list:
+  # Los ejercicios usan command/shell intencionalmente para enseñar
+  - command-instead-of-module    # [E301] Permitido en ejercicios didácticos
+  # En lab local con Docker no necesitamos preocuparnos por esto
+  - yaml[truthy]                 # Permite `yes/no` además de `true/false`
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reglas como warnings (no bloquean, solo avisan)
+# ─────────────────────────────────────────────────────────────────────────────
+warn_list:
+  - no-changed-when             # Avisar si command/shell no tiene changed_when
+  - risky-file-permissions      # Avisar sobre permisos no explícitos
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Exclusiones — carpetas/archivos que el linter debe ignorar
+# ─────────────────────────────────────────────────────────────────────────────
+exclude_paths:
+  - .git/
+  - .cache/
+  # Los ejercicios son progresivos y pueden violar reglas intencionalmente
+  # para mostrar el "antes y después" de aplicar mejores prácticas.
+  - ejercicios/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comportamiento offline (no descargar roles/collections al analizar)
+# ─────────────────────────────────────────────────────────────────────────────
+offline: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usar reglas de las collections instaladas
+# ─────────────────────────────────────────────────────────────────────────────
+use_default_rules: true
