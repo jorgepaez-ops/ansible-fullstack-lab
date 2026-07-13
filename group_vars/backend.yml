@@ -1,0 +1,61 @@
+# =============================================================================
+# group_vars/backend.yml — Variables del grupo [backend]
+# =============================================================================
+#
+# CONCEPTO:
+#   Se carga automáticamente para hosts del grupo [backend] en inventory.ini.
+#   Aquí centralizamos toda la configuración del backend Spring Boot.
+#
+# HOSTS AFECTADOS:
+#   En este lab: node2 (contenedor Docker con Java + Spring Boot)
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Versión de Java
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenJDK 21 es la versión LTS actual (hasta 2029).
+# El paquete de Ubuntu se llama "openjdk-XX-jdk" donde XX es la versión major.
+java_package: "openjdk-21-jdk"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración de la aplicación Spring Boot
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Directorio donde vivirá el .jar en el servidor
+app_install_dir: "/opt/app"
+
+# Nombre del archivo .jar (se copiará desde files/)
+app_jar_filename: "app.jar"
+
+# Puerto donde Spring Boot escuchará
+app_port: 8080
+
+# Nombre del servicio systemd
+app_service_name: "demo"
+
+# Descripción para systemd (aparece en `systemctl status`)
+app_service_description: "Demo Spring Boot App"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usuario de ejecución
+# ─────────────────────────────────────────────────────────────────────────────
+# En producción crearías un usuario sin privilegios (ej: "springapp").
+# En el lab usamos root para simplificar.
+app_run_user: "root"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Variables de entorno para Spring Boot
+# ─────────────────────────────────────────────────────────────────────────────
+# Spring Boot lee estas variables para su configuración interna.
+# Corresponden a lo que iría en application.properties pero externalizado.
+app_spring_datasource_url: "jdbc:postgresql://host.docker.internal:5432/messagesdb"
+app_spring_datasource_username: "demo"
+# NOTA: En producción esto iría en Ansible Vault (ver ejercicio 08)
+app_spring_datasource_password: "demo"
+app_spring_jpa_ddl_auto: "update"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Puerto expuesto al host (para docker-compose)
+# ─────────────────────────────────────────────────────────────────────────────
+backend_host_port: 8080

@@ -1,0 +1,70 @@
+# =============================================================================
+# group_vars/database.yml — Variables del grupo [database]
+# =============================================================================
+#
+# CONCEPTO:
+#   Se carga automáticamente para hosts del grupo [database] en inventory.ini.
+#   Toda la configuración de PostgreSQL centralizada aquí.
+#
+# HOSTS AFECTADOS:
+#   En este lab: node3 (contenedor Docker con PostgreSQL)
+#
+# SEGURIDAD:
+#   En un entorno real, las contraseñas irían cifradas con Ansible Vault.
+#   Ejemplo: ansible-vault encrypt_string 'mi_password' --name 'pg_password'
+#   Ver ejercicio 08 para aprender Vault.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Versión y paquetes de PostgreSQL
+# ─────────────────────────────────────────────────────────────────────────────
+# Ubuntu 24.04 incluye PostgreSQL 16 en sus repositorios por defecto.
+postgresql_version: "16"
+postgresql_packages:
+  - postgresql                 # Servidor PostgreSQL
+  - postgresql-contrib         # Extensiones útiles (pg_stat_statements, etc.)
+  - libpq-dev                  # Headers para compilar drivers (psycopg2, etc.)
+  - python3-psycopg2           # Driver Python necesario para los módulos de Ansible
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Base de datos del proyecto
+# ─────────────────────────────────────────────────────────────────────────────
+pg_database: "messagesdb"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usuario de la aplicación
+# ─────────────────────────────────────────────────────────────────────────────
+# Este usuario es el que usa Spring Boot para conectarse.
+pg_user: "demo"
+pg_password: "demo"  # ⚠️ En producción: usar Ansible Vault
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración de conexión
+# ─────────────────────────────────────────────────────────────────────────────
+# listen_addresses: por defecto PostgreSQL solo escucha en localhost.
+# En Docker necesitamos que escuche en todas las interfaces para que
+# el backend (otro contenedor) pueda conectarse.
+pg_listen_addresses: "*"
+pg_port: 5432
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración de autenticación (pg_hba.conf)
+# ─────────────────────────────────────────────────────────────────────────────
+# pg_hba.conf controla QUIÉN puede conectarse, desde DÓNDE, y con qué MÉTODO.
+# Formato: tipo | base_de_datos | usuario | dirección | método
+pg_hba_entries:
+  - { type: "local", database: "all", user: "postgres", method: "peer" }
+  - { type: "local", database: "all", user: "all", method: "md5" }
+  - { type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "md5" }
+  - { type: "host", database: "all", user: "all", address: "::0/0", method: "md5" }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Script SQL inicial
+# ─────────────────────────────────────────────────────────────────────────────
+pg_init_script: "init.sql"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Puerto expuesto al host (para docker-compose)
+# ─────────────────────────────────────────────────────────────────────────────
+database_host_port: 5432

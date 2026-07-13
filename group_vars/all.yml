@@ -1,0 +1,66 @@
+# =============================================================================
+# group_vars/all.yml — Variables globales (aplican a TODOS los hosts)
+# =============================================================================
+#
+# CONCEPTO CLAVE:
+#   Ansible carga variables automáticamente según la jerarquía:
+#     1. group_vars/all.yml        → todos los hosts
+#     2. group_vars/<grupo>.yml    → hosts de ese grupo
+#     3. host_vars/<host>.yml      → un host específico
+#     4. roles/<rol>/defaults/     → valores por defecto del rol (prioridad más baja)
+#     5. roles/<rol>/vars/         → valores fijos del rol (prioridad alta)
+#
+#   Cada nivel "sobreescribe" al anterior (mayor número = mayor prioridad).
+#   Documentación: https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#variable-precedence
+#
+# USO EN ESTE PROYECTO:
+#   Aquí van variables compartidas entre todos los nodos del lab:
+#   - Configuración SSH
+#   - Zona horaria
+#   - Paquetes comunes
+#   - Configuración de red interna
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Información del laboratorio
+# ─────────────────────────────────────────────────────────────────────────────
+lab_name: "ansible-fullstack-lab"
+lab_environment: "development"  # development | staging | production
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Zona horaria (se aplicará a todos los nodos)
+# ─────────────────────────────────────────────────────────────────────────────
+# Usa `timedatectl list-timezones` en Linux para ver opciones disponibles
+timezone: "America/Mexico_City"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paquetes base que deben existir en todos los nodos
+# ─────────────────────────────────────────────────────────────────────────────
+# Estos se instalan como pre-requisito antes de ejecutar cualquier rol.
+common_packages:
+  - curl          # Transferencias HTTP desde CLI
+  - wget          # Descargas directas
+  - vim           # Editor de texto
+  - htop          # Monitor de procesos
+  - net-tools     # ifconfig, netstat (útil para debug de red)
+  - ca-certificates  # Certificados SSL para conexiones HTTPS
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración de red interna del lab
+# ─────────────────────────────────────────────────────────────────────────────
+# Estos valores los usan los roles para configurar conexiones entre servicios.
+# En Docker, los contenedores se comunican por nombre de servicio o por IP del host.
+lab_network:
+  frontend_host: "127.0.0.1"
+  frontend_port: 2221
+  backend_host: "127.0.0.1"
+  backend_port: 2222
+  database_host: "127.0.0.1"
+  database_port: 2223
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usuario de gestión
+# ─────────────────────────────────────────────────────────────────────────────
+# En producción NUNCA usarías root. En este lab es aceptable para simplificar.
+ansible_management_user: "root"

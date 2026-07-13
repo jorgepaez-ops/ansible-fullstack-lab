@@ -1,0 +1,55 @@
+# =============================================================================
+# group_vars/frontend.yml — Variables del grupo [frontend]
+# =============================================================================
+#
+# CONCEPTO:
+#   Este archivo se carga automáticamente para cualquier host que pertenezca
+#   al grupo [frontend] definido en inventory.ini.
+#
+#   Ansible busca el archivo por convención de nombre:
+#     group_vars/<nombre_del_grupo>.yml
+#
+#   No necesitas declarar "include" ni importar nada — es automático.
+#
+# HOSTS AFECTADOS:
+#   En este lab: node1 (contenedor Docker con Nginx)
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración de Nginx
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Puerto donde Nginx escuchará dentro del contenedor
+nginx_listen_port: 80
+
+# Ruta raíz donde se sirven los archivos estáticos
+nginx_document_root: "/var/www/html"
+
+# Nombre del servidor (útil para virtual hosts)
+nginx_server_name: "localhost"
+
+# Nombre del archivo principal (index)
+nginx_index_file: "index.html"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración del worker de Nginx
+# ─────────────────────────────────────────────────────────────────────────────
+# worker_processes: cuántos procesos hijos crear (auto = 1 por CPU)
+nginx_worker_processes: "auto"
+
+# worker_connections: máximo de conexiones simultáneas por worker
+nginx_worker_connections: 512
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backend al que Nginx hará proxy (reverse proxy)
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx puede reenviar peticiones /api/* al backend Spring Boot.
+# Usamos la IP del host Docker ya que los contenedores están en puertos mapeados.
+nginx_proxy_backend_url: "http://host.docker.internal:8080"
+nginx_proxy_path: "/api"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Puerto expuesto al host (para docker-compose)
+# ─────────────────────────────────────────────────────────────────────────────
+frontend_host_port: 8081
