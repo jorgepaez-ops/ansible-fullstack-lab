@@ -1,0 +1,56 @@
+# =============================================================================
+# Archivo generado por Ansible — NO EDITAR MANUALMENTE
+# Template: ejercicios/06-templates-jinja2/templates/app.conf.j2
+# Generado: {{ ansible_date_time.iso8601 | default("N/A") }}
+# Host: {{ inventory_hostname }}
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuración del servidor
+# ─────────────────────────────────────────────────────────────────────────────
+[server]
+name = {{ app.name }}
+port = {{ app.port }}
+environment = {{ app.environment | default("development") }}
+debug = {{ app.debug | default(false) | lower }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Base de datos
+# ─────────────────────────────────────────────────────────────────────────────
+[database]
+host = {{ db.host }}
+port = {{ db.port }}
+name = {{ db.name }}
+user = {{ db.user }}
+{# La contraseña se omite aquí por seguridad — se pasa via variable de entorno #}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Administradores (generado con loop)
+# ─────────────────────────────────────────────────────────────────────────────
+[admins]
+{% for admin in administrators %}
+admin_{{ loop.index }} = {{ admin.name }} <{{ admin.email }}>
+{% endfor %}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Características habilitadas (condicional)
+# ─────────────────────────────────────────────────────────────────────────────
+[features]
+{% if app.environment == "production" %}
+cache_enabled = true
+log_level = warn
+hot_reload = false
+{% elif app.environment == "staging" %}
+cache_enabled = true
+log_level = info
+hot_reload = false
+{% else %}
+cache_enabled = false
+log_level = debug
+hot_reload = true
+{% endif %}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Puertos permitidos (loop con filtro join)
+# ─────────────────────────────────────────────────────────────────────────────
+allowed_ports = {{ allowed_ports | join(", ") }}

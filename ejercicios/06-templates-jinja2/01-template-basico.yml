@@ -1,0 +1,74 @@
+# =============================================================================
+# ejercicios/06-templates-jinja2/01-template-basico.yml
+# =============================================================================
+#
+# TEMPLATES JINJA2
+#
+# El módulo `ansible.builtin.template` procesa archivos .j2 reemplazando
+# las variables y ejecutando lógica Jinja2 antes de copiar al destino.
+#
+# DIFERENCIA CON copy:
+#   copy     → copia el archivo TAL CUAL (literal, sin procesar)
+#   template → procesa {{ }}, {% %}, {# #} y LUEGO copia el resultado
+#
+# BÚSQUEDA DE TEMPLATES:
+#   Ansible busca el archivo .j2 en:
+#     1. roles/<rol>/templates/  (si estás dentro de un rol)
+#     2. ./templates/            (relativo al playbook)
+#     3. Ruta absoluta si la especificas
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/06-templates-jinja2/01-template-basico.yml
+# =============================================================================
+
+---
+- name: Demostración de templates Jinja2
+  hosts: frontend
+  become: true
+  gather_facts: true
+
+  vars:
+    app:
+      name: "DemoApp"
+      port: 8080
+      environment: "development"
+      debug: true
+
+    db:
+      host: "localhost"
+      port: 5432
+      name: "messagesdb"
+      user: "demo"
+
+    administrators:
+      - { name: "Jorge", email: "jorge@ejemplo.com" }
+      - { name: "Admin", email: "admin@ejemplo.com" }
+
+    allowed_ports:
+      - 80
+      - 443
+      - 8080
+      - 5432
+
+  tasks:
+    - name: Crear directorio para el ejercicio
+      ansible.builtin.file:
+        path: /tmp/templates-demo
+        state: directory
+        mode: "0755"
+
+    - name: Generar archivo de configuración desde template
+      ansible.builtin.template:
+        src: templates/app.conf.j2
+        dest: /tmp/templates-demo/app.conf
+        mode: "0644"
+
+    - name: Mostrar archivo generado
+      ansible.builtin.command:
+        cmd: cat /tmp/templates-demo/app.conf
+      register: generated_file
+      changed_when: false
+
+    - name: Contenido del archivo generado
+      ansible.builtin.debug:
+        var: generated_file.stdout_lines

@@ -1,0 +1,39 @@
+# =============================================================================
+# ejercicios/09-inventarios-dinamicos/docker.yml
+# =============================================================================
+#
+# INVENTARIO DINÁMICO DE DOCKER
+#
+# Este archivo configura el plugin community.docker.docker_containers
+# para descubrir contenedores Docker automáticamente como hosts de Ansible.
+#
+# PREREQUISITO:
+#   pip install docker
+#   ansible-galaxy collection install community.docker
+#
+# USO:
+#   ansible-inventory -i ejercicios/09-inventarios-dinamicos/docker.yml --list
+#   ansible all -i ejercicios/09-inventarios-dinamicos/docker.yml -m ping
+#
+# NOTA: El nombre del archivo DEBE terminar en .docker.yml o .docker.yaml
+#       para que Ansible detecte automáticamente el plugin.
+# =============================================================================
+
+---
+plugin: community.docker.docker_containers
+
+# Solo incluir contenedores que estén corriendo
+status:
+  - running
+
+# Agrupar contenedores automáticamente
+# Cada grupo se genera a partir de metadatos del contenedor
+groups:
+  # Agrupar por nombre de imagen
+  ubuntu: "'ubuntu' in image.repo_tags | default([])"
+
+# Variables a extraer de cada contenedor
+compose:
+  # ansible_host: usar la IP del contenedor
+  ansible_host: "ansible_host"
+  ansible_connection: "'docker'"  # Conectar via docker exec, no SSH

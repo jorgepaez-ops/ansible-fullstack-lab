@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: "Jorge Paez"
+  description: "Configura el Message Of The Day (MOTD) con info del sistema"
+  license: "MIT"
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [noble, jammy]
+dependencies: []

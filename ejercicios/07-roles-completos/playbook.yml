@@ -1,0 +1,40 @@
+# =============================================================================
+# ejercicios/07-roles-completos/playbook.yml
+# =============================================================================
+#
+# USANDO ROLES EN UN PLAYBOOK
+#
+# Hay 3 formas de invocar roles:
+#
+#   1. roles: (clásica, se ejecuta ANTES de tasks)
+#      roles:
+#        - mi_rol
+#
+#   2. include_role: (dinámico, se ejecuta como tarea)
+#      tasks:
+#        - ansible.builtin.include_role:
+#            name: mi_rol
+#
+#   3. import_role: (estático, se incluye al parsear)
+#      tasks:
+#        - ansible.builtin.import_role:
+#            name: mi_rol
+#
+# DIFERENCIA include vs import:
+#   import → estático (se procesa al parsear, tags aplican a todo)
+#   include → dinámico (se procesa durante ejecución, permite when/loop)
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/07-roles-completos/playbook.yml
+# =============================================================================
+
+---
+- name: Ejercicio de roles completos
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    # Forma 1: invocar el rol directamente
+    - role: motd
+      tags: [motd]

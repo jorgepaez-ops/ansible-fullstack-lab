@@ -1,0 +1,11 @@
+# Variables por defecto del rol motd (sobreescribibles)
+---
+motd_banner: |
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  Servidor gestionado por Ansible                            ║
+  ║  NO realizar cambios manuales — serán sobreescritos         ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+motd_show_system_info: true
+motd_show_warning: true
+motd_contact_email: "admin@ejemplo.com"

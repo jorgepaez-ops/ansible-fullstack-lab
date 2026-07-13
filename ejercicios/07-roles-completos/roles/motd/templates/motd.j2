@@ -1,0 +1,13 @@
+{{ motd_banner }}
+{% if motd_show_system_info %}
+  Hostname: {{ ansible_hostname }}
+  OS:       {{ ansible_distribution }} {{ ansible_distribution_version }}
+  Kernel:   {{ ansible_kernel }}
+  RAM:      {{ ansible_memtotal_mb }}MB
+  CPUs:     {{ ansible_processor_vcpus }}
+{% endif %}
+{% if motd_show_warning %}
+
+  ⚠️  Cambios manuales serán revertidos en el próximo deploy.
+  📧 Contacto: {{ motd_contact_email }}
+{% endif %}

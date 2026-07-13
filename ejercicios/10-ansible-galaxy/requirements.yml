@@ -1,0 +1,21 @@
+# =============================================================================
+# ejercicios/10-ansible-galaxy/requirements.yml
+# =============================================================================
+# Archivo de ejemplo que declara roles Y collections de Galaxy.
+# Usa: ansible-galaxy install -r requirements.yml
+# =============================================================================
+
+---
+# Collections (módulos + plugins)
+collections:
+  - name: community.docker
+    version: ">=3.0.0"
+  - name: community.postgresql
+    version: ">=3.0.0"
+
+# Roles de Galaxy (tareas preempaquetadas)
+roles:
+  - name: geerlingguy.docker
+    version: "7.4.1"
+  - name: geerlingguy.pip
+    version: "3.1.0"

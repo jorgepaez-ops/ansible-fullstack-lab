@@ -1,0 +1,39 @@
+# =============================================================================
+# ejercicios/08-vault-secretos/playbook.yml
+# =============================================================================
+#
+# USANDO ANSIBLE VAULT EN PLAYBOOKS
+#
+# Este playbook demuestra cómo usar variables cifradas.
+# Las variables están en vars/secretos.yml (archivo cifrado).
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/08-vault-secretos/playbook.yml --ask-vault-pass
+#   (ingresa la contraseña que usaste al crear el vault: "lab123")
+# =============================================================================
+
+---
+- name: Demostración de Ansible Vault
+  hosts: frontend
+  become: true
+  gather_facts: false
+
+  # Importar archivo de variables cifrado
+  vars_files:
+    - vars/secretos.yml
+
+  tasks:
+    - name: Mostrar que la variable existe (sin revelar el valor)
+      ansible.builtin.debug:
+        msg: "La variable db_password tiene {{ db_password | length }} caracteres"
+      no_log: true  # IMPORTANTE: no mostrar el valor en logs
+
+    - name: Usar secreto en un archivo de configuración
+      ansible.builtin.copy:
+        content: |
+          # Archivo generado por Ansible (secretos de vault)
+          DATABASE_PASSWORD={{ db_password }}
+          API_KEY={{ api_key }}
+        dest: /tmp/app-secrets.env
+        mode: "0600"  # Solo root puede leer
+      no_log: true    # No mostrar el content en logs

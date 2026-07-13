@@ -1,0 +1,36 @@
+# =============================================================================
+# ejercicios/10-ansible-galaxy/playbook.yml
+# =============================================================================
+#
+# USANDO ROLES DE GALAXY EN UN PLAYBOOK
+#
+# Prerequisito:
+#   ansible-galaxy role install geerlingguy.docker
+#   ansible-galaxy collection install community.docker
+#
+# EJECUCIÓN:
+#   ansible-playbook ejercicios/10-ansible-galaxy/playbook.yml
+#
+# NOTA: Si no has instalado el rol, este playbook fallará.
+#       Eso es intencional — muestra la importancia de requirements.yml.
+# =============================================================================
+
+---
+- name: Demostración de roles de Galaxy
+  hosts: frontend
+  become: true
+  gather_facts: true
+
+  # Variables para el rol de Galaxy
+  vars:
+    docker_users:
+      - root
+
+  roles:
+    # Rol descargado de Galaxy
+    # Si no está instalado, Ansible muestra:
+    #   ERROR! the role 'geerlingguy.docker' was not found
+    - role: geerlingguy.docker
+      tags: [docker]
+      # Para ignorar si no está instalado, podrías usar:
+      # when: "'geerlingguy.docker' in lookup('ansible.builtin.list', '')"
