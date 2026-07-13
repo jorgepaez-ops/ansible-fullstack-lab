@@ -1,0 +1,45 @@
+# =============================================================================
+# roles/backend/defaults/main.yml — Valores por defecto del rol backend
+# =============================================================================
+#
+# RECORDATORIO:
+#   Estos valores tienen la MENOR prioridad. Se sobreescriben con:
+#     - group_vars/backend.yml (prioridad media)
+#     - host_vars/node2.yml (prioridad alta)
+#     - -e "variable=valor" en CLI (prioridad máxima)
+#
+#   Los valores aquí son "sensatos" para un lab local con Docker.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Java
+# ─────────────────────────────────────────────────────────────────────────────
+java_package: "openjdk-21-jdk"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Aplicación Spring Boot
+# ─────────────────────────────────────────────────────────────────────────────
+app_install_dir: "/opt/app"
+app_jar_filename: "app.jar"
+app_port: 8080
+app_service_name: "demo"
+app_service_description: "Demo Spring Boot App"
+app_run_user: "root"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JVM — Configuración de memoria
+# ─────────────────────────────────────────────────────────────────────────────
+# Xms: memoria inicial (heap) que la JVM reserva al arrancar
+# Xmx: memoria máxima que la JVM puede usar
+# Para un lab, 128M-256M es suficiente. En producción: depende de la carga.
+app_jvm_xms: "128m"
+app_jvm_xmx: "256m"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Spring Boot — Variables de entorno
+# ─────────────────────────────────────────────────────────────────────────────
+app_spring_datasource_url: "jdbc:postgresql://localhost:5432/messagesdb"
+app_spring_datasource_username: "demo"
+app_spring_datasource_password: "demo"
+app_spring_jpa_ddl_auto: "update"

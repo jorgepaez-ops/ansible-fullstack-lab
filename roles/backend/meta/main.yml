@@ -1,0 +1,33 @@
+# =============================================================================
+# roles/backend/meta/main.yml — Metadatos del rol backend
+# =============================================================================
+#
+# Ver roles/frontend/meta/main.yml para explicación detallada de cada campo.
+# =============================================================================
+
+---
+galaxy_info:
+  author: "Jorge Paez"
+  description: "Rol para desplegar aplicaciones Spring Boot como servicio systemd"
+  license: "MIT"
+  min_ansible_version: "2.16"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble    # 24.04 LTS
+        - jammy    # 22.04 LTS
+
+  galaxy_tags:
+    - java
+    - spring
+    - springboot
+    - backend
+    - systemd
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencias
+# ─────────────────────────────────────────────────────────────────────────────
+# En un proyecto real podrías depender de un rol "java" que instale el JDK.
+# Aquí el rol es autónomo — instala Java como parte de sus tareas.
+dependencies: []

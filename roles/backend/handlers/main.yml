@@ -1,0 +1,40 @@
+# =============================================================================
+# roles/backend/handlers/main.yml — Handlers del rol backend
+# =============================================================================
+#
+# RECORDATORIO:
+#   Los handlers se ejecutan SOLO si una task los notificó (estado "changed").
+#   Se ejecutan AL FINAL del play, en el ORDEN definido aquí.
+#
+# PATRÓN COMÚN PARA SYSTEMD:
+#   1. Recargar daemon (daemon-reload) → necesario tras cambiar unit files
+#   2. Reiniciar servicio → necesario tras cambiar .jar o configuración
+#
+# LISTEN vs NAME:
+#   - listen: "evento" → El handler se ejecuta cuando SE NOTIFICA "evento"
+#   - name: "Nombre"   → Identificador del handler (para logs)
+#   Puedes tener múltiples handlers con el mismo `listen` — se ejecutan todos.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Recargar configuración de systemd
+# ─────────────────────────────────────────────────────────────────────────────
+# Necesario SIEMPRE que modificas un archivo .service en /etc/systemd/system/
+# Sin esto, systemd sigue usando la versión en caché del unit file.
+- name: Recargar systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Reiniciar la aplicación Spring Boot
+# ─────────────────────────────────────────────────────────────────────────────
+# Se ejecuta cuando:
+#   - Cambió el .jar (nueva versión del código)
+#   - Cambió el .env (nuevas variables de configuración)
+#   - Cambió el unit file (nueva configuración de systemd)
+- name: Reiniciar aplicación
+  ansible.builtin.systemd:
+    name: "{{ app_service_name }}"
+    state: restarted
+    daemon_reload: true

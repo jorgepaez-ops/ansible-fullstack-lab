@@ -1,39 +1,203 @@
-- name: Instalar Java
+# =============================================================================
+# roles/backend/tasks/main.yml — Tareas del rol backend (Spring Boot + Java)
+# =============================================================================
+#
+# CONCEPTO:
+#   Este rol despliega una aplicación Spring Boot como servicio systemd.
+#   El flujo es:
+#     1. Instalar Java (JDK)
+#     2. Crear estructura de directorios
+#     3. Crear usuario de servicio (buena práctica de seguridad)
+#     4. Copiar el .jar al servidor
+#     5. Generar archivo de configuración con variables de entorno
+#     6. Crear unit file de systemd desde template
+#     7. Iniciar el servicio
+#     8. Verificar que responde
+#
+# SYSTEMD:
+#   Es el sistema de init de Linux moderno. Gestiona servicios (daemons):
+#     - systemctl start demo     → Arrancar
+#     - systemctl stop demo      → Detener
+#     - systemctl restart demo   → Reiniciar
+#     - systemctl status demo    → Ver estado
+#     - journalctl -u demo -f    → Ver logs en tiempo real
+#
+#   Un "unit file" (.service) le dice a systemd CÓMO ejecutar tu aplicación.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 1: Instalar Java Development Kit (JDK)
+# ─────────────────────────────────────────────────────────────────────────────
+# El JDK incluye el JRE (runtime) + herramientas de desarrollo.
+# Para solo ejecutar .jar bastaría con JRE, pero el JDK es más útil para debug.
+- name: Instalar Java ({{ java_package }})
   ansible.builtin.apt:
-    name: openjdk-21-jdk
+    name: "{{ java_package }}"
     state: present
-    update_cache: yes
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - backend-install
+    - packages
 
-- name: Crear directorio para app
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 2: Crear usuario de servicio (principio de menor privilegio)
+# ─────────────────────────────────────────────────────────────────────────────
+# En producción NUNCA ejecutes aplicaciones como root.
+# Creamos un usuario sin shell de login y sin home directory.
+# En este lab, app_run_user es "root" por simplicidad, pero este paso
+# muestra la práctica correcta para cuando vayas a producción.
+- name: Crear usuario de servicio para la aplicación
+  ansible.builtin.user:
+    name: "{{ app_run_user }}"
+    system: true         # Usuario de sistema (UID < 1000, sin home)
+    shell: /usr/sbin/nologin  # No puede hacer login interactivo
+    create_home: false
+  when: app_run_user != "root"  # No crear si es root (ya existe)
+  tags:
+    - backend-install
+    - security
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 3: Crear directorio de instalación
+# ─────────────────────────────────────────────────────────────────────────────
+- name: Crear directorio para la aplicación
   ansible.builtin.file:
-    path: /opt/app
+    path: "{{ app_install_dir }}"
     state: directory
-
-- name: Copiar archivo .jar
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/files/app.jar"
-    dest: /opt/app/app.jar
+    owner: "{{ app_run_user }}"
+    group: "{{ app_run_user }}"
     mode: "0755"
+  tags:
+    - backend-install
 
-- name: Crear servicio systemd para la app
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 4: Crear directorio para logs de la aplicación
+# ─────────────────────────────────────────────────────────────────────────────
+- name: Crear directorio de logs
+  ansible.builtin.file:
+    path: "/var/log/{{ app_service_name }}"
+    state: directory
+    owner: "{{ app_run_user }}"
+    group: "{{ app_run_user }}"
+    mode: "0755"
+  tags:
+    - backend-install
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 5: Copiar archivo .jar al servidor
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.copy busca el archivo en:
+#   1. roles/backend/files/
+#   2. {{ playbook_dir }}/files/
+#
+# Si el .jar cambió (checksum diferente), se copia y notifica al handler
+# para reiniciar el servicio con la nueva versión.
+- name: Desplegar archivo .jar de la aplicación
   ansible.builtin.copy:
-    dest: /etc/systemd/system/demo.service
-    content: |
-      [Unit]
-      Description=Demo Spring Boot App
-      After=network.target
+    src: "{{ app_jar_filename }}"
+    dest: "{{ app_install_dir }}/{{ app_jar_filename }}"
+    owner: "{{ app_run_user }}"
+    group: "{{ app_run_user }}"
+    mode: "0755"
+  notify: Reiniciar aplicación
+  tags:
+    - backend-deploy
+    - deploy
 
-      [Service]
-      ExecStart=/usr/bin/java -jar /opt/app/app.jar
-      Restart=always
-      User=root
-      WorkingDirectory=/opt/app
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 6: Generar archivo de variables de entorno
+# ─────────────────────────────────────────────────────────────────────────────
+# Spring Boot lee variables de entorno para su configuración.
+# systemd puede cargar variables desde un EnvironmentFile (más seguro que
+# ponerlas directamente en el unit file).
+#
+# El template genera un archivo tipo:
+#   SPRING_DATASOURCE_URL=jdbc:postgresql://...
+#   SPRING_DATASOURCE_USERNAME=demo
+- name: Generar archivo de variables de entorno
+  ansible.builtin.template:
+    src: app.env.j2
+    dest: "{{ app_install_dir }}/{{ app_service_name }}.env"
+    owner: "{{ app_run_user }}"
+    group: "{{ app_run_user }}"
+    mode: "0600"  # Solo el propietario puede leer (contiene secretos)
+  notify: Reiniciar aplicación
+  tags:
+    - backend-config
+    - config
 
-      [Install]
-      WantedBy=multi-user.target
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 7: Crear unit file de systemd desde template Jinja2
+# ─────────────────────────────────────────────────────────────────────────────
+# El unit file le dice a systemd:
+#   - QUÉ ejecutar (ExecStart)
+#   - CON QUÉ usuario (User)
+#   - CUÁNDO reiniciar (Restart)
+#   - DÓNDE buscar variables (EnvironmentFile)
+#   - QUÉ servicios necesita antes (After)
+- name: Crear servicio systemd desde template
+  ansible.builtin.template:
+    src: app.service.j2
+    dest: "/etc/systemd/system/{{ app_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recargar systemd   # systemctl daemon-reload (necesario tras modificar unit file)
+    - Reiniciar aplicación
+  tags:
+    - backend-config
+    - config
 
-- name: Iniciar servicio
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 8: Asegurar que el servicio esté iniciado y habilitado
+# ─────────────────────────────────────────────────────────────────────────────
+# daemon_reload: true → equivale a `systemctl daemon-reload`
+#   Necesario la primera vez o si modificaste el unit file.
+- name: Iniciar y habilitar servicio {{ app_service_name }}
   ansible.builtin.systemd:
-    name: demo
+    name: "{{ app_service_name }}"
     state: started
-    enabled: yes
+    enabled: true
+    daemon_reload: true
+  tags:
+    - backend-service
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 9: Esperar a que la aplicación esté lista
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.wait_for → espera hasta que una condición se cumpla.
+# Aquí esperamos que el puerto de Spring Boot esté abierto (acepta conexiones TCP).
+# Timeout de 60 segundos — Spring Boot puede tardar en arrancar.
+- name: Esperar a que Spring Boot inicie en puerto {{ app_port }}
+  ansible.builtin.wait_for:
+    port: "{{ app_port }}"
+    host: "127.0.0.1"
+    delay: 5          # Esperar 5 segundos antes del primer intento
+    timeout: 60       # Máximo 60 segundos total
+    state: started    # Esperar que el puerto ABRA
+  tags:
+    - backend-verify
+    - verify
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 10: Health check HTTP
+# ─────────────────────────────────────────────────────────────────────────────
+# Verificar que la aplicación responde HTTP correctamente.
+# Spring Boot Actuator expone /actuator/health por defecto.
+# Si no tienes Actuator, puedes verificar contra tu endpoint principal.
+- name: Verificar que la aplicación responde HTTP
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port }}/"
+    status_code: [200, 404]  # 404 también es válido (la app responde, solo no tiene /)
+    timeout: 10
+  register: backend_health_check
+  retries: 3
+  delay: 5
+  until: backend_health_check.status in [200, 404]
+  ignore_errors: true  # No falla el playbook si la app aún no responde
+  tags:
+    - backend-verify
+    - verify

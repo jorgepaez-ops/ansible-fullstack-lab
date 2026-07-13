@@ -1,0 +1,95 @@
+# =============================================================================
+# roles/backend/templates/app.service.j2 — Unit file de systemd (Jinja2)
+# =============================================================================
+#
+# CONCEPTO SYSTEMD UNIT FILE:
+#   Archivo que describe un servicio para systemd. Tiene 3 secciones:
+#
+#   [Unit]    → Metadatos y dependencias
+#   [Service] → CÓMO ejecutar el proceso
+#   [Install] → CUÁNDO iniciarlo automáticamente
+#
+# UBICACIÓN FINAL:
+#   /etc/systemd/system/{{ app_service_name }}.service
+#
+# DESPUÉS DE MODIFICAR:
+#   systemctl daemon-reload    ← Decirle a systemd que relea los archivos
+#   systemctl restart <nombre> ← Aplicar la nueva configuración
+#
+# COMANDOS ÚTILES DE SYSTEMD:
+#   systemctl status {{ app_service_name }}     → Ver si está corriendo
+#   systemctl restart {{ app_service_name }}    → Reiniciar
+#   journalctl -u {{ app_service_name }} -f     → Ver logs en vivo
+#   systemctl cat {{ app_service_name }}        → Ver el unit file activo
+# =============================================================================
+
+[Unit]
+# Descripción legible (aparece en `systemctl status`)
+Description={{ app_service_description }}
+
+# Dependencias: no arrancar hasta que la red esté disponible
+# After= solo define ORDEN, no DEPENDENCIA obligatoria
+After=network.target
+
+# Documentación del servicio (opcional pero útil)
+Documentation=https://docs.spring.io/spring-boot/docs/current/reference/html/
+
+[Service]
+# ─────────────────────────────────────────────────────────────────────────────
+# Tipo de servicio
+# ─────────────────────────────────────────────────────────────────────────────
+# simple: systemd considera el servicio "arrancado" inmediatamente
+# forking: el proceso hace fork y el padre termina (daemons clásicos)
+# notify: el proceso avisa a systemd cuando está listo (más avanzado)
+Type=simple
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usuario y grupo de ejecución
+# ─────────────────────────────────────────────────────────────────────────────
+User={{ app_run_user }}
+Group={{ app_run_user }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Directorio de trabajo
+# ─────────────────────────────────────────────────────────────────────────────
+WorkingDirectory={{ app_install_dir }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Variables de entorno (cargadas desde archivo externo)
+# ─────────────────────────────────────────────────────────────────────────────
+# EnvironmentFile permite separar secretos del unit file.
+# El archivo .env tiene formato: CLAVE=valor (una por línea)
+EnvironmentFile={{ app_install_dir }}/{{ app_service_name }}.env
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comando de ejecución
+# ─────────────────────────────────────────────────────────────────────────────
+# -jar: ejecuta el JAR empaquetado (Spring Boot)
+# -Xms/-Xmx: memoria mínima/máxima de la JVM
+ExecStart=/usr/bin/java -Xms{{ app_jvm_xms }} -Xmx{{ app_jvm_xmx }} -jar {{ app_install_dir }}/{{ app_jar_filename }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Política de reinicio automático
+# ─────────────────────────────────────────────────────────────────────────────
+# always: reiniciar sin importar por qué se detuvo (crash, kill, etc.)
+# on-failure: solo reiniciar si el exit code != 0
+# RestartSec: esperar N segundos antes de reiniciar (evita restart loops)
+Restart=always
+RestartSec=10
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logs — Enviar stdout/stderr a journald
+# ─────────────────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+
+# Identificador en journalctl (para filtrar: journalctl -t demo)
+SyslogIdentifier={{ app_service_name }}
+
+[Install]
+# ─────────────────────────────────────────────────────────────────────────────
+# Target de arranque
+# ─────────────────────────────────────────────────────────────────────────────
+# multi-user.target → arrancar cuando el sistema esté en modo multi-usuario
+# (equivalente al runlevel 3 clásico — sin interfaz gráfica)
+WantedBy=multi-user.target
