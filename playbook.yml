@@ -1,17 +1,172 @@
-- name: Configurar frontend con Nginx
-  hosts: frontend
-  become: true
-  roles:
-    - frontend
+# =============================================================================
+# playbook.yml — Playbook principal del laboratorio fullstack
+# =============================================================================
+#
+# CONCEPTO:
+#   Un playbook es un archivo YAML que define QUÉ hacer (roles/tareas)
+#   en QUÉ hosts (grupos del inventario), en QUÉ ORDEN.
+#
+#   Un playbook contiene uno o más "plays". Cada play:
+#     - Selecciona hosts (hosts:)
+#     - Define si escalar privilegios (become:)
+#     - Asigna roles o tareas a ejecutar
+#
+# ORDEN DE EJECUCIÓN:
+#   Ansible ejecuta los plays en orden de arriba a abajo.
+#   Dentro de cada play, el orden es:
+#     1. pre_tasks (antes de los roles)
+#     2. roles (en el orden listado)
+#     3. tasks (después de los roles)
+#     4. post_tasks (al final)
+#     5. handlers (notificados durante la ejecución)
+#
+# EJECUCIÓN:
+#   Completo:
+#     ansible-playbook playbook.yml
+#
+#   Solo un grupo (limitar hosts):
+#     ansible-playbook playbook.yml --limit frontend
+#
+#   Solo ciertas tareas (por tag):
+#     ansible-playbook playbook.yml --tags "deploy"
+#     ansible-playbook playbook.yml --tags "database-config,backend-config"
+#
+#   Dry-run (no ejecuta nada, solo muestra qué haría):
+#     ansible-playbook playbook.yml --check
+#
+#   Con más detalle en la salida:
+#     ansible-playbook playbook.yml -v      # verbose
+#     ansible-playbook playbook.yml -vvv    # muy verbose (debug)
+#
+# PREREQUISITOS:
+#   1. Docker Compose corriendo: docker compose up -d
+#   2. Collections instaladas: ansible-galaxy collection install -r requirements.yml
+#   3. SSH key configurada (ver README.md)
+# =============================================================================
 
+---
+# =============================================================================
+# Play 1: Preparación común (todos los nodos)
+# =============================================================================
+# Este play instala paquetes base en TODOS los nodos antes de configurar
+# cada servicio. Es un patrón común: "preparar el terreno" primero.
+- name: Preparar todos los nodos con paquetes base
+  hosts: all              # Ejecutar en TODOS los hosts del inventario
+  become: true            # Ejecutar como root (equivale a sudo)
+  gather_facts: true      # Recolectar información del sistema (ansible_facts)
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # pre_tasks: se ejecutan ANTES que los roles
+  # ─────────────────────────────────────────────────────────────────────────
+  # Útil para verificaciones previas o instalar dependencias comunes.
+  tasks:
+    - name: Actualizar caché de paquetes APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags:
+        - always  # "always" → esta tarea se ejecuta incluso con --tags (salvo --skip-tags)
+
+    - name: Instalar paquetes base comunes
+      ansible.builtin.apt:
+        name: "{{ common_packages }}"
+        state: present
+      tags:
+        - common
+        - packages
+
+    - name: Mostrar información del sistema
+      ansible.builtin.debug:
+        msg: >-
+          Host: {{ inventory_hostname }} |
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }} |
+          Python: {{ ansible_python_version }}
+      tags:
+        - common
+        - info
+
+# =============================================================================
+# Play 2: Configurar frontend (Nginx)
+# =============================================================================
+- name: Configurar frontend con Nginx
+  hosts: frontend         # Solo hosts del grupo [frontend]
+  become: true            # Escalar a root
+  gather_facts: false     # Ya recolectados en el play anterior
+
+  roles:
+    - role: frontend      # Ejecuta roles/frontend/ completo
+      tags:
+        - frontend        # Tag a nivel de rol (aplica a TODAS sus tareas)
+        - web
+
+# =============================================================================
+# Play 3: Configurar backend (Spring Boot)
+# =============================================================================
 - name: Configurar backend con Spring Boot
   hosts: backend
   become: true
-  roles:
-    - backend
+  gather_facts: false
 
+  roles:
+    - role: backend
+      tags:
+        - backend
+        - java
+        - app
+
+# =============================================================================
+# Play 4: Configurar base de datos (PostgreSQL)
+# =============================================================================
 - name: Configurar base de datos PostgreSQL
   hosts: database
   become: true
+  gather_facts: false
+
   roles:
-    - database
+    - role: database
+      tags:
+        - database
+        - postgresql
+        - db
+
+# =============================================================================
+# Play 5: Verificación final (smoke tests)
+# =============================================================================
+# Un "smoke test" verifica que todo el sistema funciona como unidad.
+# Se ejecuta al final, después de que todos los servicios estén configurados.
+- name: Verificación final del stack completo
+  hosts: localhost        # Se ejecuta en la máquina de control (tu Mac)
+  connection: local       # No conectarse por SSH (es local)
+  gather_facts: false
+
+  tasks:
+    - name: Verificar que Nginx responde (frontend)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8081"
+        status_code: 200
+        timeout: 10
+      register: frontend_check
+      ignore_errors: true
+      tags:
+        - verify
+        - smoke-test
+
+    - name: Verificar que Spring Boot responde (backend)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080"
+        status_code: [200, 404]
+        timeout: 10
+      register: backend_check
+      ignore_errors: true
+      tags:
+        - verify
+        - smoke-test
+
+    - name: Resumen de verificación
+      ansible.builtin.debug:
+        msg:
+          - "Frontend (Nginx):     {{ 'OK' if frontend_check is succeeded else 'FALLO' }}"
+          - "Backend (Spring Boot): {{ 'OK' if backend_check is succeeded else 'FALLO' }}"
+      tags:
+        - verify
+        - smoke-test
