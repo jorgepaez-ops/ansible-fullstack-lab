@@ -1,0 +1,36 @@
+# =============================================================================
+# roles/database/handlers/main.yml — Handlers del rol database
+# =============================================================================
+#
+# PostgreSQL requiere reinicio para ciertos cambios de configuración:
+#   - listen_addresses (requiere restart completo)
+#   - port (requiere restart completo)
+#   - pg_hba.conf (puede recargar con reload, pero restart es más seguro)
+#
+# Para otros cambios (shared_buffers, work_mem), basta con reload.
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Reiniciar PostgreSQL (restart completo)
+# ─────────────────────────────────────────────────────────────────────────────
+# Un restart cierra todas las conexiones activas y reinicia el proceso.
+# Necesario para cambios en: listen_addresses, port, ssl, shared_buffers.
+- name: Reiniciar PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Handler: Recargar configuración de PostgreSQL (sin cerrar conexiones)
+# ─────────────────────────────────────────────────────────────────────────────
+# Un reload envía SIGHUP al proceso postmaster.
+# Las conexiones activas NO se interrumpen.
+# Suficiente para cambios en: pg_hba.conf, log_level, work_mem.
+#
+# Equivalente a: SELECT pg_reload_conf(); (desde SQL)
+# O: pg_ctl reload (desde CLI)
+- name: Recargar PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded

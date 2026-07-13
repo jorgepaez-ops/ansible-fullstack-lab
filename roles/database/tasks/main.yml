@@ -1,17 +1,253 @@
-- name: Instalar PostgreSQL
+# =============================================================================
+# roles/database/tasks/main.yml — Tareas del rol database (PostgreSQL)
+# =============================================================================
+#
+# CONCEPTO:
+#   Este rol instala y configura PostgreSQL usando módulos IDEMPOTENTES
+#   de la collection community.postgresql (en vez de `command: psql`).
+#
+#   Ventajas de usar community.postgresql vs command:
+#     - Idempotente: no crea la DB dos veces, no falla si ya existe
+#     - Seguro: no expone passwords en logs (no_log: true)
+#     - Declarativo: describes el estado deseado, no los comandos
+#     - Verificable: retorna "changed" o "ok" correctamente
+#
+# PREREQUISITO:
+#   ansible-galaxy collection install -r requirements.yml
+#   (instala community.postgresql entre otras)
+#
+# FLUJO:
+#   1. Instalar PostgreSQL + dependencias Python
+#   2. Configurar autenticación (pg_hba.conf)
+#   3. Iniciar el servicio
+#   4. Crear usuario de aplicación
+#   5. Crear base de datos
+#   6. Cargar datos iniciales
+#   7. Verificar conectividad
+# =============================================================================
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 1: Instalar PostgreSQL y dependencias
+# ─────────────────────────────────────────────────────────────────────────────
+# python3-psycopg2 es OBLIGATORIO para que los módulos de
+# community.postgresql funcionen. Sin él, Ansible no puede hablar con PG.
+- name: Instalar PostgreSQL y dependencias
   ansible.builtin.apt:
-    name: postgresql
+    name: "{{ postgresql_packages }}"
     state: present
-    update_cache: yes
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - database-install
+    - packages
 
-- name: Copiar script SQL inicial
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/files/init.sql"
-    dest: /tmp/init.sql
-    mode: "0644"
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 2: Asegurar que el servicio PostgreSQL esté corriendo
+# ─────────────────────────────────────────────────────────────────────────────
+# Necesitamos PG corriendo ANTES de crear usuarios/databases.
+# Si el servicio ya está corriendo, esta tarea no hace nada (idempotente).
+- name: Iniciar y habilitar servicio PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+  tags:
+    - database-service
 
-- name: Cargar datos iniciales
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 3: Configurar pg_hba.conf (autenticación)
+# ─────────────────────────────────────────────────────────────────────────────
+# pg_hba.conf (Host-Based Authentication) controla:
+#   - QUIÉN puede conectarse
+#   - DESDE DÓNDE (local, red, cualquier IP)
+#   - CON QUÉ MÉTODO (peer, md5, scram-sha-256, trust)
+#
+# MÉTODOS de autenticación:
+#   peer   → Usa el usuario de sistema (solo conexiones locales por socket)
+#   md5    → Password hasheado (compatible con clientes antiguos)
+#   scram-sha-256 → Password con hash moderno (más seguro, PG 10+)
+#   trust  → Sin password (¡NUNCA en producción!)
+#
+# community.postgresql.postgresql_pg_hba → módulo dedicado para esto
+# Es más seguro que copiar el archivo completo porque:
+#   - No borra reglas existentes que no toques
+#   - Valida la sintaxis antes de aplicar
+- name: Configurar reglas de autenticación (pg_hba.conf)
+  community.postgresql.postgresql_pg_hba:
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+    contype: "{{ item.type }}"
+    databases: "{{ item.database }}"
+    users: "{{ item.user }}"
+    source: "{{ item.address | default(omit) }}"
+    method: "{{ item.method }}"
+    state: present
+  loop: "{{ pg_hba_entries }}"
+  # `loop` itera sobre la lista pg_hba_entries definida en group_vars/database.yml
+  # Cada iteración, `item` contiene un diccionario de la lista.
+  notify: Reiniciar PostgreSQL
+  become: true
+  become_user: postgres  # pg_hba.conf pertenece al usuario postgres
+  tags:
+    - database-config
+    - config
+    - security
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 4: Configurar listen_addresses en postgresql.conf
+# ─────────────────────────────────────────────────────────────────────────────
+# Por defecto PG solo escucha en localhost. Para que otros contenedores
+# (como el backend) puedan conectarse, necesitamos que escuche en todas
+# las interfaces: listen_addresses = '*'
+#
+# ansible.builtin.lineinfile → modifica UNA línea en un archivo existente
+# Es el módulo ideal para cambiar un valor en un archivo de configuración.
+- name: Configurar listen_addresses para conexiones remotas
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+    regexp: "^#?listen_addresses"  # Buscar línea (comentada o no)
+    line: "listen_addresses = '{{ pg_listen_addresses }}'"
+    state: present
+  notify: Reiniciar PostgreSQL
+  tags:
+    - database-config
+    - config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 5: Configurar puerto de PostgreSQL
+# ─────────────────────────────────────────────────────────────────────────────
+- name: Configurar puerto de PostgreSQL
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+    regexp: "^#?port"
+    line: "port = {{ pg_port }}"
+    state: present
+  notify: Reiniciar PostgreSQL
+  tags:
+    - database-config
+    - config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 6: Forzar reinicio de PostgreSQL si hubo cambios en configuración
+# ─────────────────────────────────────────────────────────────────────────────
+# Flush handlers ejecuta los handlers encolados AHORA (no al final del play).
+# Necesario porque los pasos siguientes requieren PG corriendo con la
+# nueva configuración (listen_addresses, pg_hba).
+- name: Aplicar configuración (flush handlers)
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - database-config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 7: Crear usuario de la aplicación
+# ─────────────────────────────────────────────────────────────────────────────
+# community.postgresql.postgresql_user → crea/modifica usuarios de PostgreSQL
+#
+# Equivalente SQL: CREATE ROLE demo WITH LOGIN PASSWORD 'demo';
+# Pero idempotente: si el usuario ya existe, no falla, solo verifica.
+#
+# Parámetros:
+#   login_user: usuario con permisos para crear otros usuarios (postgres = superuser)
+#   priv: privilegios (CREATEDB permite crear bases de datos)
+- name: Crear usuario de aplicación en PostgreSQL
+  community.postgresql.postgresql_user:
+    name: "{{ pg_user }}"
+    password: "{{ pg_password }}"
+    role_attr_flags: "CREATEDB,LOGIN"
+    state: present
+    login_user: postgres  # Conectar como superuser para crear el usuario
+  become: true
+  become_user: postgres   # Necesario para autenticación peer con postgres
+  no_log: true            # No mostrar password en los logs de Ansible
+  tags:
+    - database-config
+    - security
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 8: Crear base de datos de la aplicación
+# ─────────────────────────────────────────────────────────────────────────────
+# community.postgresql.postgresql_db → crea/elimina bases de datos
+#
+# Equivalente SQL: CREATE DATABASE messagesdb OWNER demo;
+# encoding/lc_collate: configuración de idioma y ordenamiento.
+- name: Crear base de datos de la aplicación
+  community.postgresql.postgresql_db:
+    name: "{{ pg_database }}"
+    owner: "{{ pg_user }}"
+    encoding: "UTF-8"
+    lc_collate: "en_US.UTF-8"
+    lc_ctype: "en_US.UTF-8"
+    state: present
+    login_user: postgres
+  become: true
   become_user: postgres
-  ansible.builtin.command: psql -f /tmp/init.sql
-  args:
-    creates: /var/lib/postgresql/data/PG_VERSION
+  tags:
+    - database-config
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 9: Copiar script SQL inicial al servidor
+# ─────────────────────────────────────────────────────────────────────────────
+- name: Copiar script SQL de datos iniciales
+  ansible.builtin.copy:
+    src: "{{ pg_init_script }}"
+    dest: "/tmp/{{ pg_init_script }}"
+    owner: postgres
+    group: postgres
+    mode: "0644"
+  register: sql_script_copy  # Guardar resultado para usarlo en el siguiente paso
+  tags:
+    - database-data
+    - deploy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 10: Ejecutar script SQL inicial (solo si el archivo cambió)
+# ─────────────────────────────────────────────────────────────────────────────
+# community.postgresql.postgresql_script → ejecuta archivos .sql completos
+#
+# `when: sql_script_copy.changed` → solo ejecutar si el paso anterior
+# COPIÓ un archivo nuevo o modificado. Esto evita re-ejecutar el script
+# cada vez que corres el playbook (idempotencia manual con when).
+- name: Ejecutar script SQL de datos iniciales
+  community.postgresql.postgresql_script:
+    db: "{{ pg_database }}"
+    path: "/tmp/{{ pg_init_script }}"
+    login_user: "{{ pg_user }}"
+    login_password: "{{ pg_password }}"
+    login_host: "127.0.0.1"
+  when: sql_script_copy.changed
+  no_log: true  # Ocultar password en logs
+  tags:
+    - database-data
+    - deploy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 11: Verificar conectividad a PostgreSQL
+# ─────────────────────────────────────────────────────────────────────────────
+# community.postgresql.postgresql_query → ejecuta SQL y retorna resultados
+# Ideal para health checks y validaciones.
+- name: Verificar conectividad a PostgreSQL
+  community.postgresql.postgresql_query:
+    db: "{{ pg_database }}"
+    login_user: "{{ pg_user }}"
+    login_password: "{{ pg_password }}"
+    login_host: "127.0.0.1"
+    query: "SELECT 1 AS health_check"
+  register: pg_health
+  no_log: true
+  tags:
+    - database-verify
+    - verify
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paso 12: Mostrar resultado del health check (modo debug)
+# ─────────────────────────────────────────────────────────────────────────────
+# ansible.builtin.debug → imprime información en la consola de Ansible
+# Útil para verificar valores de variables o resultados de tareas.
+# Solo se muestra si ejecutas con -v (verbose).
+- name: Resultado del health check de PostgreSQL
+  ansible.builtin.debug:
+    msg: "PostgreSQL OK — Base de datos '{{ pg_database }}' accesible por usuario '{{ pg_user }}'"
+  when: pg_health is succeeded
+  tags:
+    - database-verify
+    - verify

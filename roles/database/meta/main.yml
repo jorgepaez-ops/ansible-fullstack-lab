@@ -1,0 +1,31 @@
+# =============================================================================
+# roles/database/meta/main.yml — Metadatos del rol database
+# =============================================================================
+
+---
+galaxy_info:
+  author: "Jorge Paez"
+  description: "Rol para instalar y configurar PostgreSQL con usuarios y bases de datos"
+  license: "MIT"
+  min_ansible_version: "2.16"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble    # 24.04 LTS
+        - jammy    # 22.04 LTS
+
+  galaxy_tags:
+    - postgresql
+    - database
+    - sql
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Collections requeridas por este rol
+# ─────────────────────────────────────────────────────────────────────────────
+# Este rol usa módulos de community.postgresql que NO vienen con ansible-core.
+# Deben instalarse con: ansible-galaxy collection install -r requirements.yml
+collections:
+  - community.postgresql
+
+dependencies: []
